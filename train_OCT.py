@@ -9,6 +9,8 @@ import numpy as np
 import os
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
+import requests
+api_key = "a03f079569c5423fb8eca7be41f8dda5" #微信通知记录
 
 from sklearn.metrics import f1_score, roc_auc_score, recall_score, precision_score, accuracy_score, hamming_loss
 # from sklearn.utils.class_weight import compute_sample_weight
@@ -369,11 +371,18 @@ def main():
             max_avg = avg
     writer.close()
 
+def message(title, body):
+    """
+    微信通知打卡结果
+    """
+    url = 'http://www.pushplus.plus/send?token='+api_key+'&title='+title+'&content='+body
+    requests.get(url)
 
 if __name__ == '__main__':
     import time
-
+    message('开始训练', f'模型为{model_name}')
     start = time.time()
     main()
     end = time.time()
+    message('完成训练', f'总耗时{end - start}')
     print('总耗时', end - start)
