@@ -3,75 +3,78 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision
 from torchvision import models
-from resnest.torch import resnest50
 from net.SCNet.scnet import scnet50
 
+def pretrain_models(model_name = 'resnet50', inner_feature=1000 ,lock_weight = False):
+    if model_name == "resnet18":
+        model = models.resnet18(pretrained=True)
+
+    elif model_name == "resnet34":
+        model = models.resnet34(pretrained=True)
+
+    elif model_name == "resnet50":
+        model = models.resnet50(pretrained=True)
+
+    # elif model_name == "resnest50":
+    #     from resnest.torch import resnest50
+    #     model = resnest50(pretrained=True)
+
+    elif model_name == "inceptionv3":
+        model = models.inception_v3(pretrained=True)
+        kernel_count = model.AuxLogits.fc.in_features
+        model.AuxLogits.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
+        model.aux_logits = False
+
+    elif model_name == 'scnet50':
+        from net.SCNet.scnet import scnet50
+        model = scnet50(pretrained=True)
+    else:
+        return
+
+    if (lock_weight == True):
+        for p in model.parameters():
+            p.requires_grad = False
+    kernel_count = model.fc.in_features
+    model.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
+    return model
+
+def load_models(model_path, model_name = 'resnet50',label_type ='single-label', inner_feature=1000 ,lock_weight = False):
+    model = torch.load(model_path)
+    if (lock_weight):
+        for p in model.parameters():
+            p.requires_grad = False
+    if 'resnet' in model_name and '50' not in model_name:
+        kernel_count = 512     # 读出来的---------------
+
+    elif 'resnest' in model_name or 'scnet' in model_name or 'resnet50' in model_name:
+        kernel_count = 2048  # 读出来的---------------
+
+    elif 'inception' in model_name:
+        kernel_count = 768     # 读出来的---------------
+        if label_type == 'multilabel':
+            model.AuxLogits.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature), nn.Sigmoid())
+        else:
+            model.AuxLogits.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
+        kernel_count = 2048     # 读出来的---------------
+        model.aux_logits = False
+
+    # todo(hty):这里的nn.Linear(kernel_count, inner_feature)是否有办法赋予初始参数（而非全0或者是自带的某些默认初始参数）
+    if label_type == 'multilabel':
+        model.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature), nn.Sigmoid())
+    else:
+        model.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
+
+    return model
 
 class TwoStreamNet(nn.Module):
-    def __init__(self, fundus_path, OCT_path, fundus_model='resnest50', OCT_model='inceptionv3',
+    def __init__(self, fundus_path,OCT_path, fundus_model='resnest50', OCT_model='inceptionv3',
                  num_classes=1000, label_type='single-label', inner_feature=1000):
 
         super(TwoStreamNet, self).__init__()
         self.label_type = label_type
 
-        self.model1 = torch.load(fundus_path)
-        self.model2 = torch.load(OCT_path)
-        # for p in self.model1.parameters():
-        #     p.requires_grad = False
-        #
-        # for p in self.model2.parameters():
-        #     p.requires_grad = False
-        # todo(hty):这里的nn.Linear(kernel_count, inner_feature)是否有办法赋予初始参数（而非全0或者是自带的某些默认初始参数）
-        if 'resnet' in fundus_model and '50' not in fundus_model:
-            kernel_count = 512     # 读出来的---------------
-            if self.label_type == 'multilabel':
-                self.model1.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature), nn.Sigmoid())  # kernelCount
-            else:
-                self.model1.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-        elif 'resnest' in fundus_model or 'scnet' in fundus_model or 'resnet50' in fundus_model:
-            kernel_count = 2048  # 读出来的---------------
-            if self.label_type == 'multilabel':
-                self.model1.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature), nn.Sigmoid())  # kernelCount
-            else:
-                self.model1.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-        elif 'inception' in fundus_model:
-            kernel_count = 768     # 读出来的---------------
-            if self.label_type == 'multilabel':
-                self.model1.AuxLogits.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature), nn.Sigmoid())
-            else:
-                self.model1.AuxLogits.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-            kernel_count = 2048     # 读出来的---------------
-            if self.label_type == 'multilabel':
-                self.model1.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature), nn.Sigmoid())
-            else:
-                self.model1.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-            self.model1.aux_logits = False
-
-        if 'resnet' in OCT_model and '50' not in OCT_model:
-            kernel_count = 512     # 读出来的---------------
-            if self.label_type == 'multilabel':
-                self.model2.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature), nn.Sigmoid())  # kernelCount
-            else:
-                self.model2.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-        elif 'resnest' in OCT_model or 'scnet' in OCT_model or 'resnet50' in OCT_model:
-            kernel_count = 2048  # 读出来的---------------
-            if self.label_type == 'multilabel':
-                self.model2.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature), nn.Sigmoid())  # kernelCount
-            else:
-                self.model2.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-        elif 'inception' in OCT_model:
-            kernel_count = 768     # 读出来的---------------
-            if self.label_type == 'multilabel':
-                self.model2.AuxLogits.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature), nn.Sigmoid())
-            else:
-                self.model2.AuxLogits.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-            kernel_count = 2048     # 读出来的---------------
-            if self.label_type == 'multilabel':
-                self.model2.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature), nn.Sigmoid())
-            else:
-                self.model2.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-            self.model2.aux_logits = False
-
+        self.model1 = load_models(model_path= fundus_path, model_name=fundus_model, label_type=label_type, inner_feature=inner_feature)
+        self.model2 = load_models(model_path= OCT_path, model_name=OCT_model, label_type=label_type, inner_feature=inner_feature)
         #todo(hty):这里只有一层会不会不太够？
         self.fc = nn.Sequential(nn.Linear(inner_feature * 2, num_classes))
 
@@ -82,6 +85,23 @@ class TwoStreamNet(nn.Module):
         x = self.fc(torch.cat((x1, x2), 1))
         return x
 
+class Only_Fundus_Net(nn.Module):
+    def __init__(self, fundus_path, fundus_model='resnest50', OCT_model='inceptionv3',
+                 num_classes=1000, label_type='single-label', inner_feature=1000):
+
+        super(Only_Fundus_Net, self).__init__()
+        self.label_type = label_type
+
+        self.model1 = load_models(model_path= fundus_path, model_name=fundus_model, label_type=label_type, inner_feature=inner_feature)
+        self.model2 = pretrain_models(model_name = OCT_model, inner_feature = inner_feature, lock_weight = False)
+        self.fc = nn.Sequential(nn.Linear(inner_feature * 2, num_classes))
+
+    def forward(self, x1, x2):
+
+        x1 = self.model1(x1)
+        x2 = self.model2(x2)
+        x = self.fc(torch.cat((x1, x2), 1))
+        return x
 
 class BaseLineNet(nn.Module):
     def __init__(self, fundus_model='resnest50', OCT_model='inceptionv3', num_classes=1000,
@@ -90,94 +110,8 @@ class BaseLineNet(nn.Module):
         super(BaseLineNet, self).__init__()
         self.label_type = label_type
 
-        if fundus_model == "resnet18":
-            self.model1 = models.resnet18(pretrained=True)
-            # for p in self.model1.parameters():
-            #     p.requires_grad = False
-            kernel_count = self.model1.fc.in_features
-            self.model1.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-        elif fundus_model == "resnet34":
-            self.model1 = models.resnet34(pretrained=True)
-            # for p in self.model1.parameters():
-            #     p.requires_grad = False
-            kernel_count = self.model1.fc.in_features
-            self.model1.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-        elif fundus_model == "resnet50":
-            self.model1 = models.resnet50(pretrained=True)
-            # for p in self.model1.parameters():
-            #     p.requires_grad = False
-            kernel_count = self.model1.fc.in_features
-            self.model1.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-        elif fundus_model == "resnest50":
-            from resnest.torch import resnest50
-            self.model1 = resnest50(pretrained=True)
-            for p in self.model1.parameters():
-                p.requires_grad = False
-            kernel_count = self.model1.fc.in_features
-            self.model1.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-        elif fundus_model == "inceptionv3":
-            self.model1 = models.inception_v3(pretrained=True)
-            # for p in self.model1.parameters():
-            #     p.requires_grad = False
-            kernel_count = self.model1.AuxLogits.fc.in_features
-            self.model1.AuxLogits.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-            kernel_count = self.model1.fc.in_features
-            self.model1.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-            self.model1.aux_logits = False
-        elif fundus_model == 'scnet50':
-            from net.SCNet.scnet import scnet50
-            self.model1 = scnet50(pretrained=True)
-            for p in self.model1.parameters():
-                p.requires_grad = False
-            kernel_count = self.model1.fc.in_features
-            self.model1.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-        else:
-            return
-
-        if OCT_model == "resnet18":
-            self.model2 = models.resnet18(pretrained=True)
-            # for p in self.model2.parameters():
-            #     p.requires_grad = False
-            kernel_count = self.model2.fc.in_features
-            self.model2.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-        elif OCT_model == "resnet34":
-            self.model2 = models.resnet34(pretrained=True)
-            # for p in self.model2.parameters():
-            #     p.requires_grad = False
-            kernel_count = self.model2.fc.in_features
-            self.model2.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-        elif OCT_model == "resnet50":
-            self.model2 = models.resnet50(pretrained=True)
-            # for p in self.model2.parameters():
-            #     p.requires_grad = False
-            kernel_count = self.model2.fc.in_features
-            self.model2.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-        elif OCT_model == "resnest50":
-            from resnest.torch import resnest50
-            self.model2 = resnest50(pretrained=True)
-            for p in self.model2.parameters():
-                p.requires_grad = False
-            kernel_count = self.model2.fc.in_features
-            self.model2.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-        elif OCT_model == "inceptionv3":
-            self.model2 = models.inception_v3(pretrained=True)
-            # for p in self.model2.parameters():
-            #     p.requires_grad = False
-            kernel_count = self.model2.AuxLogits.fc.in_features
-            self.model2.AuxLogits.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-            kernel_count = self.model2.fc.in_features
-            self.model2.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-            self.model2.aux_logits = False
-        elif OCT_model == 'scnet50':
-            from net.SCNet.scnet import scnet50
-            self.model2 = scnet50(pretrained=True)
-            for p in self.model2.parameters():
-                p.requires_grad = False
-            kernel_count = self.model2.fc.in_features
-            self.model2.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-        else:
-            return
-
+        self.model1 = pretrain_models(model_name = fundus_model, inner_feature = inner_feature, lock_weight = False)
+        self.model2 = pretrain_models(model_name = OCT_model, inner_feature = inner_feature, lock_weight = False)
         self.fc = nn.Sequential(nn.Linear(inner_feature * 2, num_classes))
 
     def forward(self, x1, x2):

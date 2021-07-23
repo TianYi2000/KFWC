@@ -16,7 +16,7 @@ import torch.nn.functional as F
 import cv2
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 BATCH_SIZE = 8  # RECEIVED_PARAMS["batch_size"]
 WORKERS = 1
@@ -32,8 +32,8 @@ model_path = './model/baseline/2021_05_29+scnet50+scnet50++100+0.001+0.001+bcelo
 
 print("Test baseline ", model_path)
 
-data_dir = '/home/hejiawen/datasets/AMD_processed/'
-list_dir = '/home/hejiawen/datasets/AMD_processed/label/new_two_stream/'
+data_dir = '/home/hutianyi/datasets/AMD_processed/'
+list_dir = '/home/hutianyi/datasets/AMD_processed/label/new_two_stream/'
 
 
 def test(model, val_loader, criterion):

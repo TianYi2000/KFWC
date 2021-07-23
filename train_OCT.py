@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -9,8 +10,7 @@ import numpy as np
 import os
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
-import requests
-api_key = "a03f079569c5423fb8eca7be41f8dda5" #微信通知记录
+from utils.Message import message
 
 from sklearn.metrics import f1_score, roc_auc_score, recall_score, precision_score, accuracy_score, hamming_loss
 # from sklearn.utils.class_weight import compute_sample_weight
@@ -19,11 +19,11 @@ import time
 import torch.nn.functional as F
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 METHOD = ''
 LABEL = 'multilabel'
-MODEL = "inceptionv3"
+MODEL = "scnet50"
 LOSS = 'bceloss'
 
 START_EPOCH = 0
@@ -218,6 +218,8 @@ def validate(model, val_loader, criterion, writer, epoch):
     writer.add_scalar("Val/ELoss", out_loss, epoch)
     tbar.close()
     print(f1, auroc, recall, precision, acc, avg, hamming)
+    if epoch % 10 == 0:
+        message('Train_OCT_Epoch' + str(epoch), 'f1='+str(f1)+'\nauroc='+ str(auroc)+'\nrecall='+ str(recall)+'\nprecision='+ str(precision)+'\nacc='+ str(acc)+'\navg='+ str(avg)+'\nhamming='+ str(hamming))
     return avg
 
 
@@ -371,18 +373,13 @@ def main():
             max_avg = avg
     writer.close()
 
-def message(title, body):
-    """
-    微信通知打卡结果
-    """
-    url = 'http://www.pushplus.plus/send?token='+api_key+'&title='+title+'&content='+body
-    requests.get(url)
+
 
 if __name__ == '__main__':
     import time
-    message('开始训练', f'模型为{model_name}')
+    message('开始训练Train_OCT', '模型为'+model_name)
     start = time.time()
     main()
     end = time.time()
-    message('完成训练', f'总耗时{end - start}')
+    message('完成训练Train_OCT', '总耗时'+str(end - start))
     print('总耗时', end - start)

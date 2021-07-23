@@ -14,11 +14,14 @@ from sklearn.metrics import cohen_kappa_score, f1_score, roc_auc_score, recall_s
 
 import time
 import torch.nn.functional as F
-from net.two_stream import BaseLineNet
+from net.two_stream import TwoStreamNet, Only_Fundus_Net
+import albumentations
 import cv2
 
+from utils.Message import message
+
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 METHOD = ''
 FUNDUS_MODEL = "scnet50"
@@ -44,9 +47,10 @@ classCount = len(cols)
 
 RESUME = False
 NAME = METHOD + "+" + str(EPOCHS) + "+" + str(LR) + '+' + str(WEIGHT_DECAY) + '+' + LOSS
+fundus_path = './model/fundus/2021_05_21+scnet50++500+0.001+0.0001+bceloss.pth'
 model_name = '2021_07_23+' + FUNDUS_MODEL + '+' + OCT_MODEL + '+' + NAME + '.pth'
 
-print("Train baseline ", model_name, 'RESUME:', RESUME)
+print("Train only fundus ", model_name, 'RESUME:', RESUME)
 
 data_dir = '/home/hutianyi/datasets/AMD_processed/'
 list_dir = '/home/hutianyi/datasets/AMD_processed/label/new_two_stream/'
@@ -67,6 +71,7 @@ def train(model, train_loader, optimizer, scheduler, criterion, writer, epoch):
 
         loss = criterion(output, target)
         loss.backward()
+        #optimizer.step()通常用在每个mini-batch之中，而scheduler.step()通常用在epoch里面
         optimizer.step()
 
         output_real = torch.argmax(F.softmax(output.cpu(), dim=1), dim=1)  # 单分类用softmax
@@ -85,6 +90,7 @@ def train(model, train_loader, optimizer, scheduler, criterion, writer, epoch):
         loss_val += loss.item()
         loss_val_norm += 1
 
+    #todo(hty):对model1、model2及最后fc中所有的参数都进行更新（会不会存在只更新最后的fc效果更好的可能性）？
     scheduler.step()
     out_loss = loss_val / loss_val_norm
 
@@ -163,12 +169,15 @@ def validate(model, val_loader, criterion, writer, epoch):
     writer.add_scalar("Val/acc", acc, epoch)
     writer.add_scalar("Val/ELoss", out_loss, epoch)
     print(f1, kappa, auroc, recall, precision, acc, avg)
+    if epoch % 10 == 0:
+        message('Train_Only_Fundus_Epoch' + str(epoch), 'f1='+str(f1)+'\nauroc='+ str(auroc)+'\nrecall='+ str(recall)+'\nprecision='+ str(precision)+'\nacc='+ str(acc)+'\navg='+ str(avg)+'\nhamming=')
     tbar.close()
     return avg
 
 
 def main():
-    model = BaseLineNet(fundus_model=FUNDUS_MODEL, OCT_model=OCT_MODEL, num_classes=classCount)
+    model = Only_Fundus_Net(fundus_path=fundus_path, fundus_model=FUNDUS_MODEL, OCT_model=OCT_MODEL,
+                         num_classes=classCount)
 
     # model.input_space = 'RGB'
     # model.input_size = [3, IMAGE_SIZE, IMAGE_SIZE]
@@ -182,6 +191,7 @@ def main():
         transforms.RandomHorizontalFlip(),  # 图像一半的概率翻转，一半的概率不翻转
         ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
+        # [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
     ])
     val_OCT_tf = transforms.Compose([
         Preproc(0.2),
@@ -223,27 +233,28 @@ def main():
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=LR,
-                          momentum=MOMENTUM, weight_decay=WEIGHT_DECAY)
+                          momentum=MOMENTUM,
+                          weight_decay=WEIGHT_DECAY)
 
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=0, last_epoch=-1)
 
     max_avg = 0
 
-    writer = SummaryWriter(os.path.join('runs', 'baseline_' + model_name[:-4]))
+    writer = SummaryWriter(os.path.join('runs', 'only_fundus_' + model_name[:-4]))
     for epoch in range(START_EPOCH, EPOCHS):
         train(model, train_loader, optimizer, scheduler, criterion, writer, epoch)
         avg = validate(model, val_loader, criterion, writer, epoch)
 
         if avg > max_avg:
-            torch.save(model, './model/baseline/' + model_name)
+            torch.save(model, './model/only_fundus/' + model_name)
             max_avg = avg
     writer.close()
 
-
 if __name__ == '__main__':
     import time
-
+    message('开始训练Train_Only_Fundus', '模型为'+model_name)
     start = time.time()
     main()
     end = time.time()
+    message('完成训练Train_Only_Fundus', '总耗时'+str(end - start))
     print('总耗时', end - start)
