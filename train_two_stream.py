@@ -70,6 +70,7 @@ def train(model, train_loader, optimizer, scheduler, criterion, writer, epoch):
 
         loss = criterion(output, target)
         loss.backward()
+        #optimizer.step()通常用在每个mini-batch之中，而scheduler.step()通常用在epoch里面
         optimizer.step()
 
         output_real = torch.argmax(F.softmax(output.cpu(), dim=1), dim=1)  # 单分类用softmax
@@ -88,6 +89,7 @@ def train(model, train_loader, optimizer, scheduler, criterion, writer, epoch):
         loss_val += loss.item()
         loss_val_norm += 1
 
+    #todo(hty):对model1、model2及最后fc中所有的参数都进行更新（会不会存在只更新最后的fc效果更好的可能性）？
     scheduler.step()
     out_loss = loss_val / loss_val_norm
 

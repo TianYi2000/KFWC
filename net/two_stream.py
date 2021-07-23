@@ -21,7 +21,7 @@ class TwoStreamNet(nn.Module):
         #
         # for p in self.model2.parameters():
         #     p.requires_grad = False
-
+        # todo(hty):这里的nn.Linear(kernel_count, inner_feature)是否有办法赋予初始参数（而非全0或者是自带的某些默认初始参数）
         if 'resnet' in fundus_model and '50' not in fundus_model:
             kernel_count = 512     # 读出来的---------------
             if self.label_type == 'multilabel':
@@ -72,9 +72,11 @@ class TwoStreamNet(nn.Module):
                 self.model2.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
             self.model2.aux_logits = False
 
+        #todo(hty):这里只有一层会不会不太够？
         self.fc = nn.Sequential(nn.Linear(inner_feature * 2, num_classes))
 
     def forward(self, x1, x2):
+
         x1 = self.model1(x1)
         x2 = self.model2(x2)
         x = self.fc(torch.cat((x1, x2), 1))

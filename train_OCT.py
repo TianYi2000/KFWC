@@ -21,7 +21,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 METHOD = ''
 LABEL = 'multilabel'
-MODEL = "scnet50"
+MODEL = "inceptionv3"
 LOSS = 'bceloss'
 
 START_EPOCH = 0
@@ -34,7 +34,7 @@ NAME = METHOD + "+" + str(EPOCHS) + "+" + str(LR) + '+' + str(WEIGHT_DECAY) + '+
 
 RESUME = False
 model_path = ''
-model_name = '2021_05_20+' + MODEL + '+' + NAME + '.pth'
+model_name = '2021_07_23+' + MODEL + '+' + NAME + '.pth'
 # model_name = 'try_loss.pth'
 print("Train OCT ", model_name, 'RESUME:', RESUME)
 
@@ -51,8 +51,8 @@ classCount = len(cols)
 samples_per_cls = [445, 543, 808, 109, 1090, 23, 241, 88, 21, 158]
 
 # 训练的df 路径
-data_dir = '/home/hejiawen/datasets/AMD_processed/'
-list_dir = '/home/hejiawen/datasets/AMD_processed/label/new_two_stream/OCT/'
+data_dir = '/home/hutianyi/datasets/AMD_processed/'
+list_dir = '/home/hutianyi/datasets/AMD_processed/label/new_two_stream/OCT/'
 
 
 def train(model, train_loader, optimizer, scheduler, criterion, writer, epoch):
@@ -232,11 +232,11 @@ def main():
         model = models.resnet50(pretrained=True)
         kernel_count = model.fc.in_features
         model.fc = nn.Sequential(nn.Linear(kernel_count, classCount), nn.Sigmoid())
-    elif MODEL == "resnest50":
-        from resnest.torch import resnest50
-        model = resnest50(pretrained=True)
-        kernel_count = model.fc.in_features
-        model.fc = nn.Sequential(nn.Linear(kernel_count, classCount), nn.Sigmoid())
+    # elif MODEL == "resnest50":
+    #     from resnest.torch import resnest50
+    #     model = resnest50(pretrained=True)
+    #     kernel_count = model.fc.in_features
+    #     model.fc = nn.Sequential(nn.Linear(kernel_count, classCount), nn.Sigmoid())
     elif MODEL == "inceptionv3":
         model = models.inception_v3(pretrained=True)
         kernel_count = model.AuxLogits.fc.in_features

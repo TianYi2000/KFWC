@@ -190,3 +190,16 @@ def prepare_data(data):
     target = target[sorted_cap_indices]
 
     return images, captions, sorted_cap_lens, target
+
+import torch
+if __name__ == '__main__':
+    test1 = torch.empty(1)
+    test2 = torch.empty(2)
+    test3 = torch.empty([2,2])
+    test4 = torch.empty([3,4])
+    test5 = torch.empty(3,4)
+    print(test1)
+    print(test2)
+    print(test3)
+    print(test4)
+    print(test5)

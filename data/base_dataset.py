@@ -1,10 +1,11 @@
 import torch.utils.data as data
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageOps
 import torchvision.transforms as transforms
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
+EDGE_RANGE = 0.2 #取20%的边界元素作为图的边界，用于判断黑色/白色边界
 
 class BaseDataset(data.Dataset):
     def __init__(self):
@@ -19,17 +20,29 @@ class BaseDataset(data.Dataset):
 
 class Preproc(object):
     def __init__(self, sigma):
-
+        #初始定义sigma参数
         self.sigma = sigma
 
     def __call__(self, sample):
         w, h = sample.size
         sample_numpy = np.array(sample)
 
+        #判断图片周围EDGE_RANGE一圈是黑色还是白色，若为黑色需要将图片反色
+        inverse = False
+        top_edge = sample_numpy[0:int(h * EDGE_RANGE), : , 0].flatten()
+        down_edge = sample_numpy[int(h * (1 - EDGE_RANGE)):(h - 1), : , 0].flatten()
+        left_edge = sample_numpy[:, 0:int(w * EDGE_RANGE), 0].flatten()
+        right_edge = sample_numpy[:, int(w * (1-EDGE_RANGE)):(w - 1), 0].flatten()
+        edge_numpy = np.concatenate((top_edge, down_edge, left_edge, right_edge))
+        if (np.mean(edge_numpy) < 255/2.0):
+            sample = ImageOps.invert(sample)
+            sample_numpy = np.array(sample)
+            inverse = True
+
         mean = np.mean(sample_numpy)
         std = np.std(sample_numpy)
-        threshold = mean + std*self.sigma
-
+        threshold = mean + std * self.sigma
+        print(mean, std, threshold)
         # Top to Bottom
         top_index = 0
         for index in range(int(h/2)):
@@ -58,10 +71,13 @@ class Preproc(object):
                 right_index = index - 1
             else:
                 break
-
+        # print(top_index,bottom_index+1, left_index,right_index+1)
         sample_numpy = sample_numpy[top_index:bottom_index+1, left_index:right_index+1]
 
-        return Image.fromarray(sample_numpy)
+        result_image = Image.fromarray(sample_numpy)
+        if inverse:
+            result_image = ImageOps.invert(result_image)
+        return result_image
 
 
 class Rescale(object):
@@ -70,20 +86,62 @@ class Rescale(object):
         self.output_size = output_size
 
     def __call__(self, sample):
-        h, w = sample.size
-        if isinstance(self.output_size, int):
-            if h > w:
-                new_h, new_w = self.output_size * h / w, self.output_size
+
+
+
+        w, h = sample.size
+        sample_numpy = np.array(sample)
+
+        #判断图片周围EDGE_RANGE一圈是黑色还是白色，若为黑色需要将图片反色
+        inverse = False
+        top_edge = sample_numpy[0:int(h * EDGE_RANGE), : , 0].flatten()
+        down_edge = sample_numpy[int(h * (1 - EDGE_RANGE)):(h - 1), : , 0].flatten()
+        left_edge = sample_numpy[:, 0:int(w * EDGE_RANGE), 0].flatten()
+        right_edge = sample_numpy[:, int(w * (1-EDGE_RANGE)):(w - 1), 0].flatten()
+        edge_numpy = np.concatenate((top_edge, down_edge, left_edge, right_edge))
+        if (np.mean(edge_numpy) < 255/2.0):
+            sample_numpy = 1 - sample_numpy
+            inverse = True
+
+        mean = np.mean(sample_numpy)
+        std = np.std(sample_numpy)
+        threshold = mean + std*0.2
+        print(mean, std, threshold)
+        # Top to Bottom
+        top_index = 0
+        for index in range(int(h/2)):
+            if np.mean(sample_numpy[index, :, 0]) > threshold:
+                top_index = index + 1
             else:
-                new_h, new_w = self.output_size, self.output_size * w / h
-        else:
-            new_h, new_w = self.output_size
+                break
+        # Bottom to Top
+        bottom_index = h-1
+        for index in range(h-1, int(h/2), -1):
+            if np.mean(sample_numpy[index, :, 0]) > threshold:
+                bottom_index = index - 1
+            else:
+                break
+        # Left to Right
+        left_index = 0
+        for index in range(int(w/2)):
+            if np.mean(sample_numpy[:, index, 0]) > threshold:
+                left_index = index + 1
+            else:
+                break
+        # Right to Left
+        right_index = w - 1
+        for index in range(w - 1, int(w/2), -1):
+            if np.mean(sample_numpy[:, index, 0]) > threshold:
+                right_index = index - 1
+            else:
+                break
+        # print(top_index,bottom_index+1, left_index,right_index+1)
+        sample_numpy = sample_numpy[top_index:bottom_index+1, left_index:right_index+1]
 
-        new_h, new_w = int(new_h), int(new_w)
-
-        sample = sample.resize((new_h, new_w), Image.BICUBIC)
-
-        return sample
+        result_image = Image.fromarray(sample_numpy)
+        if inverse:
+            result_image = Image.fromarray(1 - sample_numpy)
+        return result_image
 
 
 class Resize(object):
@@ -178,12 +236,63 @@ class ImgTrans(object):
             x = enhancer.enhance(factor)
         return x
 
-if __name__== '__main__':
-    sample = Image.open('C:/Users/HTY/Desktop/微信图片_20210715112508.jpg')
-    input_image = np.array(sample, np.float32) / 255.0
-    # swap color axis because
-    # numpy image: H x W x C
-    # torch image: C X H X W
-    input_image = input_image.transpose((2, 0, 1))
-    output_torch = torch.from_numpy(input_image)
-    print(output_torch)
+def cut (sample):
+    w, h = sample.size
+    sample_numpy = np.array(sample)
+
+    #判断图片周围EDGE_RANGE一圈是黑色还是白色，若为黑色需要将图片反色
+    inverse = False
+    top_edge = sample_numpy[0:int(h * EDGE_RANGE), : , 0].flatten()
+    down_edge = sample_numpy[int(h * (1 - EDGE_RANGE)):(h - 1), : , 0].flatten()
+    left_edge = sample_numpy[:, 0:int(w * EDGE_RANGE), 0].flatten()
+    right_edge = sample_numpy[:, int(w * (1-EDGE_RANGE)):(w - 1), 0].flatten()
+    edge_numpy = np.concatenate((top_edge, down_edge, left_edge, right_edge))
+    if (np.mean(edge_numpy) < 255/2.0):
+        sample_numpy = 1 - sample_numpy
+        inverse = True
+
+    mean = np.mean(sample_numpy)
+    std = np.std(sample_numpy)
+    threshold = mean + std*0.2
+    print(mean, std, threshold)
+    # Top to Bottom
+    top_index = 0
+    for index in range(int(h/2)):
+        if np.mean(sample_numpy[index, :, 0]) > threshold:
+            top_index = index + 1
+        else:
+            break
+    # Bottom to Top
+    bottom_index = h-1
+    for index in range(h-1, int(h/2), -1):
+        if np.mean(sample_numpy[index, :, 0]) > threshold:
+            bottom_index = index - 1
+        else:
+            break
+    # Left to Right
+    left_index = 0
+    for index in range(int(w/2)):
+        if np.mean(sample_numpy[:, index, 0]) > threshold:
+            left_index = index + 1
+        else:
+            break
+    # Right to Left
+    right_index = w - 1
+    for index in range(w - 1, int(w/2), -1):
+        if np.mean(sample_numpy[:, index, 0]) > threshold:
+            right_index = index - 1
+        else:
+            break
+    # print(top_index,bottom_index+1, left_index,right_index+1)
+    sample_numpy = sample_numpy[top_index:bottom_index+1, left_index:right_index+1]
+
+    result_image = Image.fromarray(sample_numpy)
+    if inverse:
+        result_image = Image.fromarray(1 - sample_numpy)
+    return result_image
+
+if __name__ == '__main__':
+    image = Image.open('D:/Projects/AMD_processed/01619194/test.png')
+    image.show()
+    image = cut(image)
+    image.show()
