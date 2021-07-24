@@ -103,6 +103,24 @@ class Only_Fundus_Net(nn.Module):
         x = self.fc(torch.cat((x1, x2), 1))
         return x
 
+class Only_OCT_Net(nn.Module):
+    def __init__(self, OCT_path, fundus_model='resnest50', OCT_model='inceptionv3',
+                 num_classes=1000, label_type='single-label', inner_feature=1000):
+
+        super(Only_OCT_Net, self).__init__()
+        self.label_type = label_type
+
+        self.model1 = pretrain_models(model_name = fundus_model, inner_feature = inner_feature, lock_weight = False)
+        self.model2 = load_models(model_path= OCT_path, model_name=OCT_model, label_type=label_type, inner_feature=inner_feature)
+        self.fc = nn.Sequential(nn.Linear(inner_feature * 2, num_classes))
+
+    def forward(self, x1, x2):
+
+        x1 = self.model1(x1)
+        x2 = self.model2(x2)
+        x = self.fc(torch.cat((x1, x2), 1))
+        return x
+
 class BaseLineNet(nn.Module):
     def __init__(self, fundus_model='resnest50', OCT_model='inceptionv3', num_classes=1000,
                  label_type='single-label', inner_feature=1000):

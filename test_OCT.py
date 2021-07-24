@@ -21,7 +21,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 MODEL = "scnet50"
 LOSS = 'bceloss'
 
-model_path = './model/OCT/2021_05_20+scnet50++500+0.001+0.0001+bceloss.pth'
+model_path = './model/OCT/2021_07_23+scnet50++500+0.001+0.0001+bceloss.pth'
 print("Test OCT:", model_path)
 
 BATCH_SIZE = 8  # RECEIVED_PARAMS["batch_size"]
@@ -37,8 +37,8 @@ classCount = len(cols)
 samples_per_cls = [445, 543, 808, 109, 1090, 23, 241, 88, 21, 158]
 
 # 训练的df 路径
-data_dir = '/home/hejiawen/datasets/AMD_processed/'
-list_dir = '/home/hejiawen/datasets/AMD_processed/label/new_two_stream/OCT/'
+data_dir = '/home/hutianyi/datasets/AMD_processed/'
+list_dir = '/home/hutianyi/datasets/AMD_processed/label/new_two_stream/OCT/'
 
 
 def test(model, test_loader, criterion):
