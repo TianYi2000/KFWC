@@ -5,6 +5,7 @@ from torchvision import models, transforms
 from data.base_dataset import Preproc, Rescale, RandomCrop, ToTensor, Normalization, Resize
 from data.csv_dataset import ImageDataset
 from utils.utils import calc_kappa
+from utils.draw import draw_CAM
 import numpy as np
 import os
 from tqdm import tqdm
@@ -21,7 +22,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 MODEL = "scnet50"
 LOSS = 'bceloss'
 
-model_path = './model/OCT/2021_07_23+scnet50++500+0.001+0.0001+bceloss.pth'
+model_path = './model/OCT/2021_08_07+scnet50++500+0.001+0.0001+bceloss.pth'
 print("Test OCT:", model_path)
 
 BATCH_SIZE = 8  # RECEIVED_PARAMS["batch_size"]
@@ -31,14 +32,13 @@ IMAGE_SIZE = 224  # 224 for resnet, 299 for inception
 
 AVERAGE = 'weighted'
 
-cols = ['视网膜内液性暗腔', '视网膜下积液', 'RPE脱离', 'RPE下高反射病灶', '视网膜内或视网膜下高反射病灶', '尖锐的RPED峰',
-        '双层征', '多发性RPED', 'RPED切迹', '视网膜内高反射硬性渗出']
+cols = ['视网膜内液性暗腔', '视网膜下积液', 'RPE脱离', 'RPE下高反射病灶', '视网膜内或视网膜下高反射病灶']
 classCount = len(cols)
 samples_per_cls = [445, 543, 808, 109, 1090, 23, 241, 88, 21, 158]
 
 # 训练的df 路径
-data_dir = '/home/hutianyi/datasets/AMD_processed/'
-list_dir = '/home/hutianyi/datasets/AMD_processed/label/new_two_stream/OCT/'
+data_dir = '/home/hejiawen/datasets/AMD_processed/'
+list_dir = '/home/hejiawen/datasets/AMD_processed/label/new_two_stream/OCT/'
 
 
 def test(model, test_loader, criterion):
@@ -139,6 +139,8 @@ def main():
     model.input_range = [0, 1]
     model.mean = [0.485, 0.456, 0.406]  # [0.5, 0.5, 0.5] for inception* networks
     model.std = [0.229, 0.224, 0.225]  # [0.5, 0.5, 0.5] for inception* networks
+    # model.mean = [0.5, 0.5, 0.5]  # [0.5, 0.5, 0.5] for inception* networks
+    # model.std = [0.5, 0.5, 0.5]  # [0.5, 0.5, 0.5] for inception* networks
 
     # 通过随机变化来进行数据增强
     test_tf = transforms.Compose([
@@ -148,6 +150,7 @@ def main():
         Resize(IMAGE_SIZE),  # 非等比例缩小
         ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
+        # transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # resnet和inception不同
     ])
 
     test_loader = torch.utils.data.DataLoader(
@@ -162,11 +165,10 @@ def main():
     # model_dict.update(pretrained_dict)
     # model.load_state_dict(model_dict)
     model = torch.load(model_path)
-
     model = model.cuda()
 
     criterion = nn.BCELoss(reduction='mean')  # 多分类用BCELoss
-
+    # draw_CAM(model, data_dir+'02986474/OCT/OPt.1.3.6.1.4.1.33437.10.4.4101000.13238064905.17412.4.0.1.dcm.jpg', 'save.png', test_tf)
     avg, loss = test(model, test_loader, criterion)
     print('avg:', avg, 'loss:', loss)
 

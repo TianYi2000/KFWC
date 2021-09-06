@@ -19,11 +19,11 @@ import time
 import torch.nn.functional as F
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 METHOD = ''
 LABEL = 'multilabel'
-MODEL = "inceptionv3"
+MODEL = "scnet50"
 LOSS = 'bceloss'
 
 START_EPOCH = 0
@@ -36,28 +36,30 @@ NAME = METHOD + "+" + str(EPOCHS) + "+" + str(LR) + '+' + str(WEIGHT_DECAY) + '+
 
 RESUME = False
 model_path = ''
-model_name = '2021_08_05+' + MODEL + '+' + NAME + '.pth'
+model_name = '2021_07_26+' + MODEL + '+' + NAME + '.pth'
 # model_name = 'try_loss.pth'
 print("Train OCT ", model_name, 'RESUME:', RESUME)
 
 BATCH_SIZE = 8  # RECEIVED_PARAMS["batch_size"]
 WORKERS = 1
 
-IMAGE_SIZE = 299  # 224 for resnet, 299 for inception
+IMAGE_SIZE = 224  # 224 for resnet, 299 for inception
 
 AVERAGE = 'weighted'
 
-cols = ['视网膜内液性暗腔', '视网膜下积液', 'RPE脱离', 'RPE下高反射病灶', '视网膜内或视网膜下高反射病灶']
+cols = ['视网膜内液性暗腔', '视网膜下积液', 'RPE脱离', 'RPE下高反射病灶', '视网膜内或视网膜下高反射病灶', '尖锐的RPED峰',
+        '双层征', '多发性RPED', 'RPED切迹', '视网膜内高反射硬性渗出']
 classCount = len(cols)
 samples_per_cls = [445, 543, 808, 109, 1090, 23, 241, 88, 21, 158]
 
 # 训练的df 路径
-data_dir = '/home/hejiawen/datasets/AMD_processed/'
-list_dir = '/home/hejiawen/datasets/AMD_processed/label/new_two_stream/OCT/'
+data_dir = '/home/hutianyi/datasets/AMD_processed/'
+list_dir = '/home/hutianyi/datasets/AMD_processed/label/new_two_stream/OCT/'
 
 
 def train(model, train_loader, optimizer, scheduler, criterion, writer, epoch):
     model.train()
+
     tbar = tqdm(train_loader, desc='\r', ncols=100)  # 进度条
     y_pred = []
     y_true = []
@@ -217,7 +219,7 @@ def validate(model, val_loader, criterion, writer, epoch):
     tbar.close()
     print(f1, auroc, recall, precision, acc, avg, hamming)
     if epoch % 10 == 0:
-        message('Train_OCT_Epoch' + str(epoch), 'f1='+str(f1)+'\nauroc='+ str(auroc)+'\nrecall='+ str(recall)+'\nprecision='+ str(precision)+'\nacc='+ str(acc)+'\navg='+ str(avg)+'\nhamming='+ str(hamming))
+        message('Train_OCT_Resnet_Epoch' + str(epoch), 'f1='+str(f1)+'\nauroc='+ str(auroc)+'\nrecall='+ str(recall)+'\nprecision='+ str(precision)+'\nacc='+ str(acc)+'\navg='+ str(avg)+'\nhamming='+ str(hamming))
     return avg
 
 
@@ -331,7 +333,7 @@ def main():
         Resize(IMAGE_SIZE),  # 非等比例缩小
         transforms.RandomHorizontalFlip(),  # 图像一半的概率翻转，一半的概率不翻转
         ToTensor(),
-        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # resnet和inception不同
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
     ])
     val_tf = transforms.Compose([
         Preproc(0.2),
@@ -339,7 +341,7 @@ def main():
         # transforms.CenterCrop(IMAGE_SIZE),  # 以中心裁剪
         Resize(IMAGE_SIZE),     # 非等比例缩小
         ToTensor(),
-        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # resnet和inception不同
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
     ])
 
     train_loader = torch.utils.data.DataLoader(
@@ -379,9 +381,9 @@ def main():
 
 if __name__ == '__main__':
     import time
-    message('开始训练Train_OCT', '模型为'+model_name)
+    message('开始训练Train_OCT_Resnet', '模型为'+model_name)
     start = time.time()
     main()
     end = time.time()
-    message('完成训练Train_OCT', '总耗时'+str(end - start))
+    message('完成训练Train_OCT_Resnet', '总耗时'+str(end - start))
     print('总耗时', end - start)

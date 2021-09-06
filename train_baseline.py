@@ -21,8 +21,8 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 METHOD = ''
-FUNDUS_MODEL = "scnet50"
-OCT_MODEL = 'scnet50'
+FUNDUS_MODEL = "inceptionv3"
+OCT_MODEL = 'inceptionv3'
 
 START_EPOCH = 0
 EPOCHS = 100
@@ -36,20 +36,27 @@ MOMENTUM = 0.9  # RECEIVED_PARAMS["momentum"]
 WEIGHT_DECAY = 0.001  # RECEIVED_PARAMS["weight_decay"]
 LR = 0.001  # RECEIVED_PARAMS["learning_rate"]
 
-FUNDUS_IMAGE_SIZE = 224
-OCT_IMAGE_SIZE = 224  # RECEIVED_PARAMS["image_size"]
+if 'incep' in FUNDUS_MODEL:
+    FUNDUS_IMAGE_SIZE = 299
+else:
+    FUNDUS_IMAGE_SIZE = 224
+
+if 'incep' in OCT_MODEL:
+    OCT_IMAGE_SIZE = 299
+else:
+    OCT_IMAGE_SIZE = 224
 
 cols = ['新生血管性AMD', 'PCV', '其他']
 classCount = len(cols)
 
 RESUME = False
 NAME = METHOD + "+" + str(EPOCHS) + "+" + str(LR) + '+' + str(WEIGHT_DECAY) + '+' + LOSS
-model_name = '2021_07_23+' + FUNDUS_MODEL + '+' + OCT_MODEL + '+' + NAME + '.pth'
+model_name = '2021_08_16+' + FUNDUS_MODEL + '+' + OCT_MODEL + '+' + NAME + '.pth'
 
 print("Train baseline ", model_name, 'RESUME:', RESUME)
 
-data_dir = '/home/hutianyi/datasets/AMD_processed/'
-list_dir = '/home/hutianyi/datasets/AMD_processed/label/new_two_stream/'
+data_dir = '/home/hejiawen/datasets/AMD_processed/'
+list_dir = '/home/hejiawen/datasets/AMD_processed/label/new_two_stream/'
 
 
 def train(model, train_loader, optimizer, scheduler, criterion, writer, epoch):
@@ -181,14 +188,17 @@ def main():
         Resize(OCT_IMAGE_SIZE),  # 非等比例缩小
         transforms.RandomHorizontalFlip(),  # 图像一半的概率翻转，一半的概率不翻转
         ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
+        # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
+        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # inception
     ])
     val_OCT_tf = transforms.Compose([
         Preproc(0.2),
         Resize(OCT_IMAGE_SIZE),  # 非等比例缩小
         ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
+        # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
+        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # inception
     ])
+
 
     train_fundus_tf = transforms.Compose([
         Preproc(0.2),
@@ -196,14 +206,16 @@ def main():
         transforms.CenterCrop(FUNDUS_IMAGE_SIZE),  # 以中心裁剪，fundus适用，OCT不适用
         transforms.RandomHorizontalFlip(),  # 图像一半的概率翻转，一半的概率不翻转
         ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
+        # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
+        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # inception
     ])
     val_fundus_tf = transforms.Compose([
         Preproc(0.2),
         Rescale(FUNDUS_IMAGE_SIZE),  # 等比例缩小
         transforms.CenterCrop(FUNDUS_IMAGE_SIZE),  # 以中心裁剪
         ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
+        # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
+        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # inception
     ])
 
     train_loader = torch.utils.data.DataLoader(

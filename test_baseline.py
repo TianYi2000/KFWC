@@ -8,7 +8,7 @@ from utils.utils import calc_kappa
 import numpy as np
 import os
 from tqdm import tqdm
-
+from utils.draw import draw_roc
 from sklearn.metrics import cohen_kappa_score, f1_score, roc_auc_score, recall_score, precision_score, accuracy_score
 
 import time
@@ -16,7 +16,7 @@ import torch.nn.functional as F
 import cv2
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 BATCH_SIZE = 8  # RECEIVED_PARAMS["batch_size"]
 WORKERS = 1
@@ -28,12 +28,12 @@ OCT_IMAGE_SIZE = 224  # RECEIVED_PARAMS["image_size"]
 
 cols = ['新生血管性AMD', 'PCV', '其他']
 classCount = len(cols)
-model_path = './model/baseline/2021_05_29+scnet50+scnet50++100+0.001+0.001+bceloss.pth'
+model_path = './model/baseline/2021_08_16+scnet50+scnet50++100+0.001+0.001+bceloss.pth'
 
 print("Test baseline ", model_path)
 
-data_dir = '/home/hutianyi/datasets/AMD_processed/'
-list_dir = '/home/hutianyi/datasets/AMD_processed/label/new_two_stream/'
+data_dir = '/home/hejiawen/datasets/AMD_processed/'
+list_dir = '/home/hejiawen/datasets/AMD_processed/label/new_two_stream/'
 
 
 def test(model, val_loader, criterion):
@@ -43,7 +43,7 @@ def test(model, val_loader, criterion):
     tbar = tqdm(val_loader, desc='\r', ncols=100)  # 进度条
     loss_val = 0
     loss_val_norm = 0
-    print(tbar)
+    # print(tbar)
     for batch_idx, (fundus, OCT, target) in enumerate(tbar):
         fundus, OCT, target = fundus.cuda(), OCT.cuda(), target.cuda()  # fundus.cuda(),target.cuda()
         # optimizer.zero_grad()

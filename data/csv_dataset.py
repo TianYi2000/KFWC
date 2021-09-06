@@ -103,13 +103,12 @@ class TwoStreamDataset(Dataset):
                 self.fundus_list.append(line[0])
                 self.OCT_list.append(line[1])
 
-                #todo(hty):多分类维度是不是最终输出3维比较好？
                 if line[2] == 'CNV':
-                    self.label_list.append(0)   #[1,0,0]?
+                    self.label_list.append(0)   #[1,0,0]
                 elif line[2] == 'PCV':
-                    self.label_list.append(1)   #[0,1,0]?
+                    self.label_list.append(1)   #[0,1,0]
                 elif line[2] == 'Non-wet-AMD':
-                    self.label_list.append(2)   #[0,0,1]?
+                    self.label_list.append(2)   #[0,0,1]
                 else:
                     print('label error:', line[2])
         assert len(self.fundus_list) == len(self.OCT_list) == len(self.label_list)

@@ -21,11 +21,11 @@ import cv2
 from utils.Message import message
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 METHOD = ''
-FUNDUS_MODEL = "scnet50"
-OCT_MODEL = 'scnet50'
+FUNDUS_MODEL = "resnet50"
+OCT_MODEL = 'resnet50'
 
 START_EPOCH = 0
 EPOCHS = 100
@@ -39,21 +39,28 @@ MOMENTUM = 0.9  # RECEIVED_PARAMS["momentum"]
 WEIGHT_DECAY = 0.001  # RECEIVED_PARAMS["weight_decay"]
 LR = 0.001  # RECEIVED_PARAMS["learning_rate"]
 
-FUNDUS_IMAGE_SIZE = 224
-OCT_IMAGE_SIZE = 224  # RECEIVED_PARAMS["image_size"]
+if 'incep' in FUNDUS_MODEL:
+    FUNDUS_IMAGE_SIZE = 299
+else:
+    FUNDUS_IMAGE_SIZE = 224
+
+if 'incep' in OCT_MODEL:
+    OCT_IMAGE_SIZE = 299
+else:
+    OCT_IMAGE_SIZE = 224
 
 cols = ['新生血管性AMD', 'PCV', '其他']
 classCount = len(cols)
 
 RESUME = False
 NAME = METHOD + "+" + str(EPOCHS) + "+" + str(LR) + '+' + str(WEIGHT_DECAY) + '+' + LOSS
-fundus_path = './model/fundus/2021_05_21+scnet50++500+0.001+0.0001+bceloss.pth'
-model_name = '2021_07_23+' + FUNDUS_MODEL + '+' + OCT_MODEL + '+' + NAME + '.pth'
+fundus_path = './model/fundus/2021_05_21+resnet50++500+0.001+5e-05+bceloss.pth'
+model_name = '2021_08_12+' + FUNDUS_MODEL + '+' + OCT_MODEL + '+' + NAME + '.pth'
 
 print("Train only fundus ", model_name, 'RESUME:', RESUME)
 
-data_dir = '/home/hutianyi/datasets/AMD_processed/'
-list_dir = '/home/hutianyi/datasets/AMD_processed/label/new_two_stream/'
+data_dir = '/home/hejiawen/datasets/AMD_processed/'
+list_dir = '/home/hejiawen/datasets/AMD_processed/label/new_two_stream/'
 
 
 def train(model, train_loader, optimizer, scheduler, criterion, writer, epoch):
@@ -169,8 +176,8 @@ def validate(model, val_loader, criterion, writer, epoch):
     writer.add_scalar("Val/acc", acc, epoch)
     writer.add_scalar("Val/ELoss", out_loss, epoch)
     print(f1, kappa, auroc, recall, precision, acc, avg)
-    if epoch % 10 == 0:
-        message('Train_Only_Fundus_Epoch' + str(epoch), 'f1='+str(f1)+'\nauroc='+ str(auroc)+'\nrecall='+ str(recall)+'\nprecision='+ str(precision)+'\nacc='+ str(acc)+'\navg='+ str(avg)+'\nhamming=')
+    # if epoch % 10 == 0:
+    #     message('Train_Only_Fundus_Epoch' + str(epoch), 'f1='+str(f1)+'\nauroc='+ str(auroc)+'\nrecall='+ str(recall)+'\nprecision='+ str(precision)+'\nacc='+ str(acc)+'\navg='+ str(avg)+'\nhamming=')
     tbar.close()
     return avg
 

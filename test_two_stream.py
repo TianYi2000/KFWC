@@ -1,26 +1,22 @@
+import os
+
+import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
+import torch.nn.functional as F
+from sklearn.metrics import f1_score, roc_auc_score, recall_score, precision_score, accuracy_score
 from torchvision import transforms
-from data.base_dataset import Preproc, Rescale, RandomCrop, ToTensor, Normalization, Resize, ImgTrans
-from data.csv_dataset import TwoStreamDataset
-from utils.utils import calc_kappa
-import numpy as np
-import os
 from tqdm import tqdm
 
-from sklearn.metrics import cohen_kappa_score, f1_score, roc_auc_score, recall_score, precision_score, accuracy_score
-
-import time
-import torch.nn.functional as F
-from net.two_stream import TwoStreamNet
-import albumentations
-import cv2
+from data.base_dataset import Preproc, Rescale, ToTensor, Resize
+from data.csv_dataset import TwoStreamDataset
+from utils.utils import calc_kappa
+from utils.draw import draw_roc
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-model_path = './model/two_stream/2021_05_26+inceptionv3+inceptionv3++100+0.001+0.001+bceloss.pth'
+model_path = './model/two_stream/2021_08_12+resnet50+resnet50++100+0.001+0.001+bceloss.pth'
 print("Test two_stream:", model_path)
 
 BATCH_SIZE = 8  # RECEIVED_PARAMS["batch_size"]
@@ -29,8 +25,8 @@ LOSS = 'bceloss'
 
 AVERAGE = 'weighted'
 
-FUNDUS_IMAGE_SIZE = 299
-OCT_IMAGE_SIZE = 299  # RECEIVED_PARAMS["image_size"]
+FUNDUS_IMAGE_SIZE = 224
+OCT_IMAGE_SIZE = 224  # RECEIVED_PARAMS["image_size"]
 
 cols = ['新生血管性AMD', 'PCV', '其他']
 classCount = len(cols)
@@ -43,6 +39,7 @@ def test(model, test_loader, criterion):
     model.eval()
     y_pred = []
     y_true = []
+    y_pred_prob = []
     tbar = tqdm(test_loader, desc='\r', ncols=100)  # 进度条
     loss_val = 0
     loss_val_norm = 0
@@ -53,8 +50,10 @@ def test(model, test_loader, criterion):
         output = model(fundus, OCT)
 
         loss = criterion(output, target)
+        output_faltten = F.softmax(output.cpu(), dim=1)
+        y_pred_prob.extend(output_faltten)
+        output_real = torch.argmax(output_faltten, dim=1)  # 单分类用softmax
 
-        output_real = torch.argmax(F.softmax(output.cpu(), dim=1), dim=1)  # 单分类用softmax
         output_one_hot = F.one_hot(output_real, classCount)
         target_one_hot = F.one_hot(target, classCount)
         y_pred.extend(output_one_hot.numpy())
@@ -70,8 +69,9 @@ def test(model, test_loader, criterion):
 
     y_pred = np.array(y_pred)
     y_true = np.array(y_true)
-    auroc = roc_auc_score(y_true, y_pred, average=AVERAGE)
 
+    auroc = roc_auc_score(y_true, y_pred_prob, average=AVERAGE)
+    draw_roc(auroc, y_pred_prob, y_true )
     y_pred = (y_pred > 0.5)
     f1 = f1_score(y_true, y_pred, average=AVERAGE)
     precision = precision_score(y_true, y_pred, average=AVERAGE)
@@ -96,8 +96,8 @@ def main():
         Preproc(0.2),
         Resize(OCT_IMAGE_SIZE),  # 非等比例缩小
         ToTensor(),
-        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # resnet和inception不同
-        # [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
+        #
     ])
 
     test_fundus_tf = transforms.Compose([
@@ -105,7 +105,7 @@ def main():
         Rescale(FUNDUS_IMAGE_SIZE),  # 等比例缩小
         transforms.CenterCrop(FUNDUS_IMAGE_SIZE),  # 以中心裁剪
         ToTensor(),
-        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # resnet和inception不同
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
     ])
 
     test_loader = torch.utils.data.DataLoader(
@@ -118,6 +118,8 @@ def main():
     #     model = torch.load(model_path)
 
     model = torch.load(model_path)
+    # print(model)
+    # return
     model = model.cuda()
 
     criterion = nn.CrossEntropyLoss()

@@ -15,9 +15,9 @@ def pretrain_models(model_name = 'resnet50', inner_feature=1000 ,lock_weight = F
     elif model_name == "resnet50":
         model = models.resnet50(pretrained=True)
 
-    # elif model_name == "resnest50":
-    #     from resnest.torch import resnest50
-    #     model = resnest50(pretrained=True)
+    elif model_name == "resnest50":
+        from resnest.torch import resnest50
+        model = resnest50(pretrained=True)
 
     elif model_name == "inceptionv3":
         model = models.inception_v3(pretrained=True)
@@ -57,7 +57,7 @@ def load_models(model_path, model_name = 'resnet50',label_type ='single-label', 
             model.AuxLogits.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
         kernel_count = 2048     # 读出来的---------------
         model.aux_logits = False
-
+    # print(kernel_count)
     # todo(hty):这里的nn.Linear(kernel_count, inner_feature)是否有办法赋予初始参数（而非全0或者是自带的某些默认初始参数）
     if label_type == 'multilabel':
         model.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature), nn.Sigmoid())
@@ -79,7 +79,6 @@ class TwoStreamNet(nn.Module):
         self.fc = nn.Sequential(nn.Linear(inner_feature * 2, num_classes))
 
     def forward(self, x1, x2):
-
         x1 = self.model1(x1)
         x2 = self.model2(x2)
         x = self.fc(torch.cat((x1, x2), 1))
@@ -94,6 +93,8 @@ class Only_Fundus_Net(nn.Module):
 
         self.model1 = load_models(model_path= fundus_path, model_name=fundus_model, label_type=label_type, inner_feature=inner_feature)
         self.model2 = pretrain_models(model_name = OCT_model, inner_feature = inner_feature, lock_weight = False)
+        assert(self.model1 is None, "self.model1 is None")
+        assert(self.model2 is None, "self.model2 is None")
         self.fc = nn.Sequential(nn.Linear(inner_feature * 2, num_classes))
 
     def forward(self, x1, x2):
