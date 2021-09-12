@@ -18,11 +18,11 @@ from net.two_stream import BaseLineNet
 import cv2
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 METHOD = ''
-FUNDUS_MODEL = "inceptionv3"
-OCT_MODEL = 'inceptionv3'
+FUNDUS_MODEL = "scnet50"
+OCT_MODEL = 'scnet50'
 
 START_EPOCH = 0
 EPOCHS = 100
@@ -51,7 +51,7 @@ classCount = len(cols)
 
 RESUME = False
 NAME = METHOD + "+" + str(EPOCHS) + "+" + str(LR) + '+' + str(WEIGHT_DECAY) + '+' + LOSS
-model_name = '2021_08_16+' + FUNDUS_MODEL + '+' + OCT_MODEL + '+' + NAME + '.pth'
+model_name = '2021_09_09+' + FUNDUS_MODEL + '+' + OCT_MODEL + '+' + NAME + '.pth'
 
 print("Train baseline ", model_name, 'RESUME:', RESUME)
 
@@ -195,8 +195,8 @@ def main():
         Preproc(0.2),
         Resize(OCT_IMAGE_SIZE),  # 非等比例缩小
         ToTensor(),
-        # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
-        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # inception
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
+        # transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # inception
     ])
 
 
@@ -206,8 +206,8 @@ def main():
         transforms.CenterCrop(FUNDUS_IMAGE_SIZE),  # 以中心裁剪，fundus适用，OCT不适用
         transforms.RandomHorizontalFlip(),  # 图像一半的概率翻转，一半的概率不翻转
         ToTensor(),
-        # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
-        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # inception
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
+        # transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # inception
     ])
     val_fundus_tf = transforms.Compose([
         Preproc(0.2),
