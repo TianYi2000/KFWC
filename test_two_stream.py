@@ -17,12 +17,16 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 MODEL_PATHS=[
-    './model/two_stream/2021_08_16+resnet18+resnet18++100+0.001+0.001+bceloss.pth',
-             './model/two_stream/2021_08_16+resnet34+resnet34++100+0.001+0.001+bceloss.pth',
+    # './model/two_stream/2021_08_16+resnet18+resnet18++100+0.001+0.001+bceloss.pth',
+    #          './model/two_stream/2021_08_16+resnet34+resnet34++100+0.001+0.001+bceloss.pth',
+    #          './model/two_stream/2021_05_21+resnet34+resnet34++100+0.001+0.001+bceloss.pth'
              './model/baseline/2021_08_16+resnest50+resnest50++100+0.001+0.001+bceloss.pth',
-            './model/two_stream/2021_05_26+inceptionv3+inceptionv3++100+0.001+0.001+bceloss.pth',
-             './model/two_stream/2021_08_10+scnet50+scnet50++100+0.001+0.001+bceloss.pth',
+            # './model/two_stream/2021_05_26+inceptionv3+inceptionv3++100+0.001+0.001+bceloss.pth',
+            #  './model/two_stream/2021_08_10+scnet50+scnet50++100+0.001+0.001+bceloss.pth',
              './model/two_stream/2021_08_12+resnest50+resnest50++100+0.001+0.001+bceloss.pth',
+
+             # './model/two_stream/2021_05_26+scnet50+scnet50++100+0.001+0.001+bceloss.pth',
+             # './model/two_stream/2021_08_10+scnet50+scnet50++100+0.001+0.001+bceloss.pth',
 ]
 
 BATCH_SIZE = 8  # RECEIVED_PARAMS["batch_size"]

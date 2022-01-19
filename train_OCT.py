@@ -29,25 +29,34 @@ LOSS = 'bceloss'
 START_EPOCH = 0
 EPOCHS = 500
 
+picked_col = [5,6,7,8,9]
+cols = ['视网膜内液性暗腔', '视网膜下积液', 'RPE脱离', 'RPE下高反射病灶', '视网膜内或视网膜下高反射病灶']
+
 MOMENTUM = 0.9  # RECEIVED_PARAMS["momentum"]
 WEIGHT_DECAY = 0.0001  # RECEIVED_PARAMS["weight_decay"]
 LR = 0.001  # RECEIVED_PARAMS["learning_rate"]
-NAME = METHOD + "+" + str(EPOCHS) + "+" + str(LR) + '+' + str(WEIGHT_DECAY) + '+' + LOSS
+NAME = METHOD + "+" + str(EPOCHS) + "+" + str(LR) + '+' + str(WEIGHT_DECAY) + '+' + LOSS + '+' + ''.join(picked_col)
+
+
 
 RESUME = False
 model_path = ''
-model_name = '2021_08_05+' + MODEL + '+' + NAME + '.pth'
+model_name = '2021_09_15+' + MODEL + '+' + NAME + '.pth'
 # model_name = 'try_loss.pth'
 print("Train OCT ", model_name, 'RESUME:', RESUME)
 
 BATCH_SIZE = 8  # RECEIVED_PARAMS["batch_size"]
 WORKERS = 1
 
-IMAGE_SIZE = 299  # 224 for resnet, 299 for inception
+if 'incep' in MODEL:
+    IMAGE_SIZE = 299
+else:
+    IMAGE_SIZE = 224
 
 AVERAGE = 'weighted'
 
-cols = ['视网膜内液性暗腔', '视网膜下积液', 'RPE脱离', 'RPE下高反射病灶', '视网膜内或视网膜下高反射病灶']
+
+
 classCount = len(cols)
 samples_per_cls = [445, 543, 808, 109, 1090, 23, 241, 88, 21, 158]
 
@@ -221,7 +230,7 @@ def validate(model, val_loader, criterion, writer, epoch):
     return avg
 
 
-def main():
+def  main():
     if MODEL == "resnet18":
         model = models.resnet18(pretrained=True)
         kernel_count = model.fc.in_features

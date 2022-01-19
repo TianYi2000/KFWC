@@ -1,22 +1,19 @@
+import os
+
+import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
+import torch.nn.functional as F
+from sklearn.metrics import f1_score, roc_auc_score, recall_score, precision_score, accuracy_score
 from torchvision import transforms
-from data.base_dataset import Preproc, Rescale, RandomCrop, ToTensor, Normalization, Resize, ImgTrans
+from tqdm import tqdm
+
+from data.base_dataset import Preproc, Rescale, ToTensor, Resize
 from data.csv_dataset import TwoStreamDataset
 from utils.utils import calc_kappa
-import numpy as np
-import os
-from tqdm import tqdm
-from utils.draw import draw_roc
-from sklearn.metrics import cohen_kappa_score, f1_score, roc_auc_score, recall_score, precision_score, accuracy_score
-
-import time
-import torch.nn.functional as F
-import cv2
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 BATCH_SIZE = 8  # RECEIVED_PARAMS["batch_size"]
 WORKERS = 1
@@ -36,7 +33,8 @@ MODEL_PATHS = [
                # './model/baseline/2021_08_16+scnet50+scnet50++100+0.001+0.001+bceloss.pth',
                # './model/baseline/2021_08_16+resnest50+resnest50++100+0.001+0.001+bceloss.pth',
                #  './model/baseline/2021_09_08+resnet50+resnet50++100+0.001+0.001+bceloss.pth',
-                './model/baseline/2021_09_08+scnet50+scnet50++100+0.001+0.001+bceloss.pth',
+                './model/baseline/2021_10_29+resnet50+resnet50++100+0.001+0.001+bceloss.pth',
+                './model/baseline/2021_10_29+scnet50+scnet50++100+0.001+0.001+bceloss.pth',
                ]
 
 

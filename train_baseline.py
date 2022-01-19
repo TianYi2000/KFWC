@@ -1,3 +1,4 @@
+import argparse
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -18,11 +19,11 @@ from net.two_stream import BaseLineNet
 import cv2
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 METHOD = ''
-FUNDUS_MODEL = "scnet50"
-OCT_MODEL = 'scnet50'
+FUNDUS_MODEL = "resnet50"
+OCT_MODEL = 'resnet50'
 
 START_EPOCH = 0
 EPOCHS = 100
@@ -51,7 +52,7 @@ classCount = len(cols)
 
 RESUME = False
 NAME = METHOD + "+" + str(EPOCHS) + "+" + str(LR) + '+' + str(WEIGHT_DECAY) + '+' + LOSS
-model_name = '2021_09_09+' + FUNDUS_MODEL + '+' + OCT_MODEL + '+' + NAME + '.pth'
+model_name = '2021_10_29+' + FUNDUS_MODEL + '+' + OCT_MODEL + '+' + NAME + '.pth'
 
 print("Train baseline ", model_name, 'RESUME:', RESUME)
 
@@ -128,24 +129,25 @@ def validate(model, val_loader, criterion, writer, epoch):
     loss_val_norm = 0
     print(tbar)
     for batch_idx, (fundus, OCT, target) in enumerate(tbar):
-        fundus, OCT, target = fundus.cuda(), OCT.cuda(), target.cuda()  # fundus.cuda(),target.cuda()
-        # optimizer.zero_grad()
-        output = model(fundus, OCT)
+        with torch.no_grad():
+            fundus, OCT, target = fundus.cuda(), OCT.cuda(), target.cuda()  # fundus.cuda(),target.cuda()
+            # optimizer.zero_grad()
+            output = model(fundus, OCT)
 
-        loss = criterion(output, target)
+            loss = criterion(output, target)
 
-        output_real = torch.argmax(F.softmax(output.cpu(), dim=1), dim=1)  # 单分类用softmax
-        output_one_hot = F.one_hot(output_real, classCount)
-        target_one_hot = F.one_hot(target, classCount)
-        y_pred.extend(output_one_hot.numpy())
-        y_true.extend(target_one_hot.data.cpu().numpy())
+            output_real = torch.argmax(F.softmax(output.cpu(), dim=1), dim=1)  # 单分类用softmax
+            output_one_hot = F.one_hot(output_real, classCount)
+            target_one_hot = F.one_hot(target, classCount)
+            y_pred.extend(output_one_hot.numpy())
+            y_true.extend(target_one_hot.data.cpu().numpy())
 
-        writer.add_scalar("Val/loss", loss.item(), epoch * len(val_loader) + batch_idx)
-        tbar.set_description('Val Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-            epoch, batch_idx * len(OCT), len(val_loader.dataset),
-            100. * batch_idx / len(val_loader), loss.item()))
-        loss_val += loss.item()
-        loss_val_norm += 1
+            writer.add_scalar("Val/loss", loss.item(), epoch * len(val_loader) + batch_idx)
+            tbar.set_description('Val Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                epoch, batch_idx * len(OCT), len(val_loader.dataset),
+                100. * batch_idx / len(val_loader), loss.item()))
+            loss_val += loss.item()
+            loss_val_norm += 1
 
     out_loss = loss_val / loss_val_norm
 
@@ -188,8 +190,8 @@ def main():
         Resize(OCT_IMAGE_SIZE),  # 非等比例缩小
         transforms.RandomHorizontalFlip(),  # 图像一半的概率翻转，一半的概率不翻转
         ToTensor(),
-        # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
-        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # inception
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
+        # transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # inception
     ])
     val_OCT_tf = transforms.Compose([
         Preproc(0.2),
@@ -214,8 +216,8 @@ def main():
         Rescale(FUNDUS_IMAGE_SIZE),  # 等比例缩小
         transforms.CenterCrop(FUNDUS_IMAGE_SIZE),  # 以中心裁剪
         ToTensor(),
-        # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
-        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # inception
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
+        # transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # inception
     ])
 
     train_loader = torch.utils.data.DataLoader(

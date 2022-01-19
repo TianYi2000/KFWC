@@ -36,6 +36,7 @@ def pretrain_models(model_name = 'resnet50', inner_feature=1000 ,lock_weight = F
             p.requires_grad = False
     kernel_count = model.fc.in_features
     model.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
+    # model.fc = nn.Sequential()
     return model
 
 def load_models(model_path, model_name = 'resnet50',label_type ='single-label', inner_feature=1000 ,lock_weight = False):
@@ -75,7 +76,6 @@ class TwoStreamNet(nn.Module):
 
         self.model1 = load_models(model_path= fundus_path, model_name=fundus_model, label_type=label_type, inner_feature=inner_feature)
         self.model2 = load_models(model_path= OCT_path, model_name=OCT_model, label_type=label_type, inner_feature=inner_feature)
-        #todo(hty):这里只有一层会不会不太够？
         self.fc = nn.Sequential(nn.Linear(inner_feature * 2, num_classes))
 
     def forward(self, x1, x2):

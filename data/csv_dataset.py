@@ -37,7 +37,7 @@ class ImageDataset(Dataset):
         # print(label_path)
         assert exists(label_path)
 
-        with open(label_path, 'r') as f:
+        with open(label_path, 'r',encoding = "utf-8") as f:
             reader = csv.reader(f)
             data = list(reader)
             data = data[1:]
@@ -92,7 +92,7 @@ class TwoStreamDataset(Dataset):
         # print(label_path)
         assert exists(label_path)
 
-        with open(label_path, 'r') as f:
+        with open(label_path, 'r',encoding = "utf-8") as f:
             reader = csv.reader(f)
             data = list(reader)
             data = data[1:]
@@ -153,7 +153,7 @@ class MultiModeDataset(Dataset):
         # print(label_path)
         assert exists(label_path)
 
-        with open(label_path, 'r') as f:
+        with open(label_path, 'r',encoding = "utf-8") as f:
             reader = csv.reader(f)
             data = list(reader)
             data = data[1:]
