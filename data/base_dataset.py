@@ -106,7 +106,7 @@ class Rescale(object):
         mean = np.mean(sample_numpy)
         std = np.std(sample_numpy)
         threshold = mean + std*0.2
-        print(mean, std, threshold)
+        # print(mean, std, threshold)
         # Top to Bottom
         top_index = 0
         for index in range(int(h/2)):
@@ -254,7 +254,7 @@ def cut (sample):
     mean = np.mean(sample_numpy)
     std = np.std(sample_numpy)
     threshold = mean + std*0.2
-    print(mean, std, threshold)
+    # print(mean, std, threshold)
     # Top to Bottom
     top_index = 0
     for index in range(int(h/2)):

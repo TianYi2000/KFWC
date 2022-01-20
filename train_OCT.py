@@ -160,18 +160,17 @@ def  main():
     model.fc = nn.Sequential(nn.Linear(kernel_count, classCount), nn.Sigmoid())
 
     train_tf = transforms.Compose([
-        Preproc(0.2),
-        Resize(args.oct_size),
+        transforms.Resize(256),
+        transforms.RandomResizedCrop(args.oct_size),
         transforms.RandomHorizontalFlip(),
         ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
     val_tf = transforms.Compose([
-        Preproc(0.2),
         Resize(args.oct_size),
         ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
     train_loader = torch.utils.data.DataLoader(
