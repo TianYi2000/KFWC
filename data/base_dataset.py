@@ -42,7 +42,7 @@ class Preproc(object):
         mean = np.mean(sample_numpy)
         std = np.std(sample_numpy)
         threshold = mean + std * self.sigma
-        print(mean, std, threshold)
+        # print(mean, std, threshold)
         # Top to Bottom
         top_index = 0
         for index in range(int(h/2)):
