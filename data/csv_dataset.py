@@ -47,7 +47,7 @@ class ImageDataset(Dataset):
                 label = list()
                 for item in line[2: self.cla_num + 2]:
                     item = int(item)
-                    label.append(item)
+                    label.append(int(item))
                 self.image_list.append(line[0])
                 self.label_list.append(label)
         assert len(self.image_list) == len(self.label_list)

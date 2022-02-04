@@ -15,6 +15,7 @@ from sklearn.metrics import cohen_kappa_score, f1_score, roc_auc_score, recall_s
     hamming_loss
 from data.base_dataset import Preproc, Rescale, RandomCrop, ToTensor, Normalization, Resize, ImgTrans
 from data.csv_dataset import ImageDataset
+# from torch.utils.tensorboard import SummaryWriter
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 cols = ['Intraretinal fluid',
@@ -25,16 +26,15 @@ cols = ['Intraretinal fluid',
 classCount = len(cols)
 data_dir = 'AMD_processed/'
 list_dir = 'AMD_processed/label/new_two_stream/OCT/'
-samples_per_cls = [445, 543, 808, 109, 1090, 23, 241, 88, 21, 158]
 pre_models = \
-        {"resnet18": models.resnet18,
-         "resnet34": models.resnet34,
-         "resnet50": models.resnet50,
-         "resnest50": resnest50,
-         "scnet50": scnet50,
-         "inceptionv3": models.inception_v3,
-         "vgg16": models.vgg16,
-         "vgg19": models.vgg19}
+    {"resnet18": models.resnet18,
+     "resnet34": models.resnet34,
+     "resnet50": models.resnet50,
+     "resnest50": resnest50,
+     "scnet50": scnet50,
+     "inceptionv3": models.inception_v3,
+     "vgg16": models.vgg16,
+     "vgg19": models.vgg19}
 
 def get_parser():
     parser = argparse.ArgumentParser(description='Input hyperparameter of model:')
@@ -50,7 +50,7 @@ def get_parser():
     parser.add_argument('--fundus_size', type=int, default=224, help='The input size for Color fundus image')
     parser.add_argument('--oct_size', type=int, default=224, help='The input size for OCT image')
 
-    parser.add_argument('--epoch', type=int, default=100, help = 'The number of training epoch')
+    parser.add_argument('--epoch', type=int, default=500, help = 'The number of training epoch')
     parser.add_argument('--batch_size', type=int, default=64, help='The size of batch')
 
     parser.add_argument('--workers', type=int, default=1, help='The number of sub-processes to use for data loading')
@@ -67,6 +67,12 @@ def get_parser():
     args = parser.parse_args()
     return args
 
+def pred2int(x):
+    out = []
+    for i in range(len(x)):
+        # print(x[i])
+        out.append([1 if y > 0.5 else 0 for y in x[i]])
+    return out
 
 def train(model, train_loader, optimizer, scheduler, criterion, epoch):
     model.train()
@@ -98,16 +104,28 @@ def train(model, train_loader, optimizer, scheduler, criterion, epoch):
     y_pred = np.array(y_pred)
     y_true = np.array(y_true)
     auroc = roc_auc_score(y_true, y_pred, average=args.average)
-    y_pred = (y_pred > 0.5)
-
+    y_pred = pred2int(y_pred)
+    # print(y_pred)
+    # print(y_true)
     f1 = f1_score(y_true, y_pred, average=args.average)
     precision = precision_score(y_true, y_pred, average=args.average)
     recall = recall_score(y_true, y_pred, average=args.average)
     acc = accuracy_score(y_true=y_true, y_pred=y_pred)
     hamming = hamming_loss(y_true, y_pred)
     avg = (f1 + precision + recall + auroc) / 4.0
+    # writer.add_scalar("Train/f1", f1, epoch)
+    # writer.add_scalar("Train/auroc", auroc, epoch)f
+    # writer.add_scalar("Train/recall", recall, epoch)
+    # writer.add_scalar("Train/precision", precision, epoch)
+    # writer.add_scalar("Train/acc", acc, epoch)
+    # writer.add_scalar("Train/avg", avg, epoch)
+    # writer.add_scalar("Train/hamming_loss", hamming, epoch)
+    # writer.add_scalar("Train/ELoss", out_loss, epoch)
     tbar.close()
-    print(f1, auroc, recall, precision, acc, avg, hamming)
+    print()
+    print('{:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s}'.format('f1', 'auroc', 'recall', 'precision', 'acc', 'avg', 'hamming', 'loss'))
+    print('{:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s}'.format(str(round(f1,4)), str(round(auroc,4)), str(round(recall,4)), str(round(precision,4)), str(round(acc,4)), str(round(avg,4)), str(round(hamming,4)), str(round(out_loss,4)) ))
+# print(f1, auroc, recall, precision, acc, avg, hamming)
 
 
 def validate(model, val_loader, criterion, epoch):
@@ -139,7 +157,7 @@ def validate(model, val_loader, criterion, epoch):
     auroc = roc_auc_score(y_true, y_pred, average=args.average)
     # kappa = calc_kappa(y_true, y_pred, cols)
 
-    y_pred = (y_pred > 0.5)
+    y_pred = pred2int(y_pred)
     # sw = compute_sample_weight(class_weight='balanced', y=y_true)
 
     f1 = f1_score(y_true, y_pred, average=args.average)
@@ -149,15 +167,31 @@ def validate(model, val_loader, criterion, epoch):
     hamming = hamming_loss(y_true=y_true, y_pred=y_pred)
 
     avg = (f1 + recall + precision + auroc) / 4.0
+    # writer.add_scalar("Val/f1", f1, epoch)
+    # writer.add_scalar("Val/auroc", auroc, epoch)
+    # writer.add_scalar("Val/recall", recall, epoch)
+    # writer.add_scalar("Val/precision", precision, epoch)
+    # writer.add_scalar("Val/acc", acc, epoch)
+    # writer.add_scalar("Val/avg", avg, epoch)
+    # writer.add_scalar("Val/hamming_loss", hamming, epoch)
+    # writer.add_scalar("Val/ELoss", out_loss, epoch)
     tbar.close()
-    print(f1, auroc, recall, precision, acc, avg, hamming)
+    print()
+    print('{:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s}'.format('f1', 'auroc', 'recall', 'precision', 'acc', 'avg', 'hamming', 'loss'))
+    print('{:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s}'.format(str(round(f1,4)), str(round(auroc,4)), str(round(recall,4)), str(round(precision,4)), str(round(acc,4)), str(round(avg,4)), str(round(hamming,4)), str(round(out_loss,4)) ))
+
+    # print(f1, auroc, recall, precision, acc, avg, hamming)
     return avg
 
 
 def  main():
     model = pre_models[args.oct_model](pretrained=True)
-    kernel_count = model.fc.in_features
-    model.fc = nn.Sequential(nn.Linear(kernel_count, classCount), nn.Sigmoid())
+    if 'vgg' in args.oct_model:
+        kernel_count = model.classifier[0].in_features
+        model.classifier = nn.Sequential(nn.Linear(kernel_count, classCount), nn.Sigmoid())
+    else:
+        kernel_count = model.fc.in_features
+        model.fc = nn.Sequential(nn.Linear(kernel_count, classCount), nn.Sigmoid())
 
     train_tf = transforms.Compose([
         transforms.Resize(256),
@@ -176,12 +210,12 @@ def  main():
     train_loader = torch.utils.data.DataLoader(
         ImageDataset(data_dir, 'train', train_tf, classCount, list_dir=list_dir),
         batch_size=args.batch_size, shuffle=True,
-        num_workers=args.workers, pin_memory=True, drop_last=True
+        num_workers=args.workers, pin_memory=True, drop_last=False
     )
     val_loader = torch.utils.data.DataLoader(
         ImageDataset(data_dir, 'val', val_tf, classCount, list_dir=list_dir),
         batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True, drop_last=True
+        num_workers=args.workers, pin_memory=True, drop_last=False
     )
 
     model = model.cuda()
@@ -195,7 +229,7 @@ def  main():
 
     max_avg = 0
 
-    for epoch in range(args.epoch):
+    for epoch in range(1, args.epoch):
         train(model, train_loader, optimizer, scheduler, criterion, epoch)
         avg = validate(model, val_loader, criterion, epoch)
         if avg > max_avg:
@@ -211,6 +245,7 @@ if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.use_gpu)
     data_dir = os.path.join(args.root_path, data_dir)
     list_dir = os.path.join(args.root_path, list_dir)
+    # writer = SummaryWriter(os.path.join('runs', 'OCT/' + model_name[:-4]))
     print("Train OCT ", model_name)
     start = time.time()
     main()
