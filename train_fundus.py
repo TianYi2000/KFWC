@@ -16,6 +16,7 @@ from sklearn.metrics import cohen_kappa_score, f1_score, roc_auc_score, recall_s
 from data.base_dataset import Preproc, Rescale, RandomCrop, ToTensor, Normalization, Resize, ImgTrans
 from data.csv_dataset import ImageDataset
 # from torch.utils.tensorboard import SummaryWriter
+from utils.utils import calc_kappa,hamming_score
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 cols = ['黄斑区视网膜出血', '黄斑区视网膜渗出', '黄斑区玻璃膜疣', '视网膜下橘红色病灶', '视网膜下出血']
@@ -70,7 +71,9 @@ def pred2int(x):
         out.append([1 if y > 0.5 else 0 for y in x[i]])
     return out
 
-def train(model, train_loader, optimizer, scheduler, criterion, epoch):
+def train(model, train_loader, optimizer, scheduler, criterion, epoch, log):
+    print(f'Epoch={epoch}\n')
+    log.write(f'Epoch={epoch}\n')
     model.train()
     tbar = tqdm(train_loader, desc='\r', ncols=100)
     y_pred = []
@@ -100,6 +103,7 @@ def train(model, train_loader, optimizer, scheduler, criterion, epoch):
     y_pred = np.array(y_pred)
     y_true = np.array(y_true)
     auroc = roc_auc_score(y_true, y_pred, average=args.average)
+    kappa = calc_kappa(y_true, y_pred, cols)
     y_pred = pred2int(y_pred)
     # print(y_pred)
     # print(y_true)
@@ -119,12 +123,12 @@ def train(model, train_loader, optimizer, scheduler, criterion, epoch):
     # writer.add_scalar("Train/ELoss", out_loss, epoch)
     tbar.close()
     print()
-    print('{:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s}'.format('f1', 'auroc', 'recall', 'precision', 'acc', 'avg', 'hamming', 'loss'))
-    print('{:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s}'.format(str(round(f1,4)), str(round(auroc,4)), str(round(recall,4)), str(round(precision,4)), str(round(acc,4)), str(round(avg,4)), str(round(hamming,4)), str(round(out_loss,4)) ))
+    log.write('{:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s}\n'.format('f1', 'auroc', 'recall', 'precision', 'acc', 'kappa', 'hamming', 'loss'))
+    log.write('{:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s}\n'.format(str(round(f1,4)), str(round(auroc,4)), str(round(recall,4)), str(round(precision,4)), str(round(acc,4)), str(round(kappa,4)), str(round(hamming,4)), str(round(out_loss,4)) ))
 # print(f1, auroc, recall, precision, acc, avg, hamming)
 
 
-def validate(model, val_loader, criterion, epoch):
+def validate(model, val_loader, criterion, epoch, log):
     model.eval()
     y_pred = []
     y_true = []
@@ -151,7 +155,7 @@ def validate(model, val_loader, criterion, epoch):
     y_pred = np.array(y_pred)
     y_true = np.array(y_true)
     auroc = roc_auc_score(y_true, y_pred, average=args.average)
-    # kappa = calc_kappa(y_true, y_pred, cols)
+    kappa = calc_kappa(y_true, y_pred, cols)
 
     y_pred = pred2int(y_pred)
     # sw = compute_sample_weight(class_weight='balanced', y=y_true)
@@ -173,8 +177,8 @@ def validate(model, val_loader, criterion, epoch):
     # writer.add_scalar("Val/ELoss", out_loss, epoch)
     tbar.close()
     print()
-    print('{:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s}'.format('f1', 'auroc', 'recall', 'precision', 'acc', 'avg', 'hamming', 'loss'))
-    print('{:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s}'.format(str(round(f1,4)), str(round(auroc,4)), str(round(recall,4)), str(round(precision,4)), str(round(acc,4)), str(round(avg,4)), str(round(hamming,4)), str(round(out_loss,4)) ))
+    log.write('{:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s}\n'.format('f1', 'auroc', 'recall', 'precision', 'acc', 'kappa', 'hamming', 'loss'))
+    log.write('{:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s}\n'.format(str(round(f1,4)), str(round(auroc,4)), str(round(recall,4)), str(round(precision,4)), str(round(acc,4)), str(round(kappa,4)), str(round(hamming,4)), str(round(out_loss,4)) ))
 
     # print(f1, auroc, recall, precision, acc, avg, hamming)
     return avg
@@ -182,12 +186,17 @@ def validate(model, val_loader, criterion, epoch):
 
 def  main():
     model = pre_models[args.fundus_model](pretrained=True)
-    kernel_count = model.fc.in_features
-    model.fc = nn.Sequential(nn.Linear(kernel_count, classCount), nn.Sigmoid())
+    if 'vgg' in args.fundus_model:
+        model.classifier[3] = nn.Linear(in_features=4096, out_features=1000, bias=True)
+        model.classifier[-1] = nn.Linear(in_features=1000, out_features=classCount, bias=True)
+        model.classifier.add_module(f'{len(model.classifier)}',nn.Sigmoid())
+    else:
+        kernel_count = model.fc.in_features
+        model.fc = nn.Sequential(nn.Linear(kernel_count, classCount), nn.Sigmoid())
+
 
     train_tf = transforms.Compose([
-        transforms.Resize(256),
-        transforms.RandomResizedCrop(args.fundus_size),
+        Resize(args.fundus_size),
         transforms.RandomHorizontalFlip(),
         ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -218,12 +227,13 @@ def  main():
                           weight_decay=args.weight_decay)
 
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=0, last_epoch=-1)
-
+    train_log = open('logs/fundus/'+ model_name + '-train.log', 'w')
+    val_log = open('logs/fundus/'+ model_name + '-val.log', 'w')
     max_avg = 0
 
-    for epoch in range(1, args.epoch):
-        train(model, train_loader, optimizer, scheduler, criterion, epoch)
-        avg = validate(model, val_loader, criterion, epoch)
+    for epoch in range(0, args.epoch):
+        train(model, train_loader, optimizer, scheduler, criterion, epoch, train_log)
+        avg = validate(model, val_loader, criterion, epoch, val_log)
         if avg > max_avg:
             torch.save(model, './model/fundus/' + model_name)
             max_avg = avg
@@ -233,7 +243,7 @@ def  main():
 if __name__ == '__main__':
     args = get_parser()
     NAME = str(args.epoch) + "+" + str(args.learning_rate) + '+' + str(args.weight_decay) + '+' + args.loss
-    model_name = datetime.datetime.now().strftime('%Y-%m-%d') + '+' + args.fundus_model + '+' + NAME + '.pth'
+    model_name = datetime.datetime.now().strftime('%Y-%m-%d') + '+' + args.fundus_model + '+' + NAME
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.use_gpu)
     data_dir = os.path.join(args.root_path, data_dir)
     list_dir = os.path.join(args.root_path, list_dir)

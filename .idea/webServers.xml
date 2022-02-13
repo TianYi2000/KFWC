@@ -3,9 +3,9 @@
   <component name="WebServers">
     <option name="servers">
       <webServer id="68a1de6c-c80f-4724-a9da-eae7304658b2" name="69号服务器">
-        <fileTransfer rootFolder="/home/hutianyi" accessType="SFTP" host="10.112.83.133" port="17877" sshConfigId="b605bc25-57ed-4be9-9d16-04afb1785d3f" sshConfig="hutianyi@10.112.83.133:17877 password">
+        <fileTransfer rootFolder="/home/hutianyi" accessType="SFTP" host="10.112.83.133" port="17877" sshConfigId="b8c68cf0-8082-420e-9a9d-afc5e09579b0" sshConfig="hutianyi@10.112.83.133:17877 password">
           <advancedOptions>
-            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
           </advancedOptions>
         </fileTransfer>
       </webServer>
