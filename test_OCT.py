@@ -36,6 +36,15 @@ pre_models = \
          "vgg16": models.vgg16,
          "vgg19": models.vgg19}
 
+mean = {
+    224 : [0.485, 0.456, 0.406],
+    299 : [0.5, 0.5, 0.5]
+}
+std = {
+    224 : [0.229, 0.224, 0.225],
+    299 : [0.5, 0.5, 0.5]
+}
+
 def get_parser():
     parser = argparse.ArgumentParser(description='Input hyperparameter of model:')
     parser.add_argument('--root_path', type=str, default='/home/hejiawen/datasets',
@@ -46,7 +55,8 @@ def get_parser():
     parser.add_argument('--oct_model', type=str, default='resnet50',
                             choices=['resnet18', 'resnet34', 'resnet50', 'resnest50', 'scnet50', 'inceptionv3', 'vgg16', 'vgg19'],
                             help='The backbone model for OCT image')
-
+    parser.add_argument('--fundus_path', type=str, help='the model file path of fundus model')
+    parser.add_argument('--oct_path', type=str, help='the model file path of OCT model')
     parser.add_argument('--fundus_size', type=int, default=224, help='The input size for Color fundus image')
     parser.add_argument('--oct_size', type=int, default=224, help='The input size for OCT image')
 
@@ -132,15 +142,12 @@ def test(model, val_loader, criterion):
 
 
 def  main():
-    model = pre_models[args.oct_model](pretrained=True)
-    kernel_count = model.fc.in_features
-    model.fc = nn.Sequential(nn.Linear(kernel_count, classCount), nn.Sigmoid())
-    model = torch.load('./model/OCT/2022-01-22+resnet50+400+0.001+0.001+bceloss.pth')
+    model = torch.load(args.oct_path)
 
     test_tf = transforms.Compose([
         Resize(args.oct_size),
         ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=mean[args.oct_size], std=std[args.oct_size])
     ])
 
     test_loader = torch.utils.data.DataLoader(
@@ -155,10 +162,6 @@ def  main():
     optimizer = optim.SGD(model.parameters(), lr=args.learning_rate,
                           momentum=args.momentum,
                           weight_decay=args.weight_decay)
-
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=0, last_epoch=-1)
-
-    max_avg = 0
 
     test(model, test_loader, criterion)
 

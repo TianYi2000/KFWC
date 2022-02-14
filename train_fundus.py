@@ -33,6 +33,15 @@ pre_models = \
          "vgg16": models.vgg16,
          "vgg19": models.vgg19}
 
+mean = {
+    224 : [0.485, 0.456, 0.406],
+    299 : [0.5, 0.5, 0.5]
+}
+std = {
+    224 : [0.229, 0.224, 0.225],
+    299 : [0.5, 0.5, 0.5]
+}
+
 def get_parser():
     parser = argparse.ArgumentParser(description='Input hyperparameter of model:')
     parser.add_argument('--root_path', type=str, default='/home/hejiawen/datasets',
@@ -235,7 +244,7 @@ def  main():
         train(model, train_loader, optimizer, scheduler, criterion, epoch, train_log)
         avg = validate(model, val_loader, criterion, epoch, val_log)
         if avg > max_avg:
-            torch.save(model, './model/fundus/' + model_name)
+            torch.save(model, './model/fundus/' + model_name + '.pth')
             max_avg = avg
 
 

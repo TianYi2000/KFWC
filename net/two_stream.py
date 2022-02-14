@@ -3,68 +3,40 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision
 from torchvision import models
+from resnest.torch import resnest50
 from net.SCNet.scnet import scnet50
 
+pre_models = {
+    "resnet18": models.resnet18,
+    "resnet34": models.resnet34,
+    "resnet50": models.resnet50,
+    "resnest50": resnest50,
+    "scnet50": scnet50,
+    "inceptionv3": models.inception_v3,
+    "vgg16": models.vgg16,
+    "vgg19": models.vgg19
+}
+
 def pretrain_models(model_name = 'resnet50', inner_feature=1000 ,lock_weight = False):
-    if model_name == "resnet18":
-        model = models.resnet18(pretrained=True)
-
-    elif model_name == "resnet34":
-        model = models.resnet34(pretrained=True)
-
-    elif model_name == "resnet50":
-        model = models.resnet50(pretrained=True)
-
-    elif model_name == "resnest50":
-        from resnest.torch import resnest50
-        model = resnest50(pretrained=True)
-
-    elif model_name == "inceptionv3":
-        model = models.inception_v3(pretrained=True)
-        kernel_count = model.AuxLogits.fc.in_features
-        model.AuxLogits.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-        model.aux_logits = False
-
-    elif model_name == 'scnet50':
-        from net.SCNet.scnet import scnet50
-        model = scnet50(pretrained=True)
-    else:
-        return
+    model = pre_models[model_name](pretrained=True)
 
     if (lock_weight == True):
         for p in model.parameters():
             p.requires_grad = False
     kernel_count = model.fc.in_features
     model.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-    # model.fc = nn.Sequential()
     return model
 
 def load_models(model_path, model_name = 'resnet50',label_type ='single-label', inner_feature=1000 ,lock_weight = False):
     model = torch.load(model_path)
-    if (lock_weight):
-        for p in model.parameters():
-            p.requires_grad = False
-    if 'resnet' in model_name and '50' not in model_name:
-        kernel_count = 512     # 读出来的---------------
-
-    elif 'resnest' in model_name or 'scnet' in model_name or 'resnet50' in model_name:
-        kernel_count = 2048  # 读出来的---------------
-
-    elif 'inception' in model_name:
-        kernel_count = 768     # 读出来的---------------
-        if label_type == 'multilabel':
-            model.AuxLogits.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature), nn.Sigmoid())
-        else:
-            model.AuxLogits.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-        kernel_count = 2048     # 读出来的---------------
-        model.aux_logits = False
-    # print(kernel_count)
-    # todo(hty):这里的nn.Linear(kernel_count, inner_feature)是否有办法赋予初始参数（而非全0或者是自带的某些默认初始参数）
-    if label_type == 'multilabel':
-        model.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature), nn.Sigmoid())
+    if 'vgg' in model_name:
+        model.classifier = model.classifier[:5]
     else:
+        kernel_count = model.fc[0].in_features
+    # if label_type == 'multilabel':
+    #     model.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature), nn.Sigmoid())
+    # else:
         model.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
-
     return model
 
 class TwoStreamNet(nn.Module):
@@ -73,10 +45,9 @@ class TwoStreamNet(nn.Module):
 
         super(TwoStreamNet, self).__init__()
         self.label_type = label_type
-
         self.model1 = load_models(model_path= fundus_path, model_name=fundus_model, label_type=label_type, inner_feature=inner_feature)
         self.model2 = load_models(model_path= OCT_path, model_name=OCT_model, label_type=label_type, inner_feature=inner_feature)
-        self.fc = nn.Sequential(nn.Linear(inner_feature * 2, num_classes))
+        self.fc = nn.Sequential(nn.Linear(inner_feature * 2, num_classes), nn.Softmax(dim=1))
 
     def forward(self, x1, x2):
         x1 = self.model1(x1)
@@ -93,8 +64,6 @@ class Only_Fundus_Net(nn.Module):
 
         self.model1 = load_models(model_path= fundus_path, model_name=fundus_model, label_type=label_type, inner_feature=inner_feature)
         self.model2 = pretrain_models(model_name = OCT_model, inner_feature = inner_feature, lock_weight = False)
-        assert(self.model1 is None, "self.model1 is None")
-        assert(self.model2 is None, "self.model2 is None")
         self.fc = nn.Sequential(nn.Linear(inner_feature * 2, num_classes))
 
     def forward(self, x1, x2):

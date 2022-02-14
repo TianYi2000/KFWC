@@ -37,6 +37,15 @@ pre_models = \
      "vgg16": models.vgg16,
      "vgg19": models.vgg19}
 
+mean = {
+    224 : [0.485, 0.456, 0.406],
+    299 : [0.5, 0.5, 0.5]
+}
+std = {
+    224 : [0.229, 0.224, 0.225],
+    299 : [0.5, 0.5, 0.5]
+}
+
 def get_parser():
     parser = argparse.ArgumentParser(description='Input hyperparameter of model:')
     parser.add_argument('--root_path', type=str, default='/home/hejiawen/datasets',
@@ -84,7 +93,6 @@ def train(model, train_loader, optimizer, scheduler, criterion, epoch, log):
     y_true = []
     loss_val = 0
     loss_valnorm = 0
-    # print(tbar)
     for batch_idx, (inputs, target) in enumerate(tbar):
         target = target.float()
         data, target = inputs.cuda(), target.cuda()

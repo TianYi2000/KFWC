@@ -1,7 +1,9 @@
 import os
-
-import numpy as np
+import time
+import datetime
+import argparse
 import torch
+import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.metrics import f1_score, roc_auc_score, recall_score, precision_score, accuracy_score
@@ -14,163 +16,144 @@ from utils.utils import calc_kappa
 from utils.draw import draw_roc
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
-MODEL_PATHS=[
-    # './model/two_stream/2021_08_16+resnet18+resnet18++100+0.001+0.001+bceloss.pth',
-    #          './model/two_stream/2021_08_16+resnet34+resnet34++100+0.001+0.001+bceloss.pth',
-    #          './model/two_stream/2021_05_21+resnet34+resnet34++100+0.001+0.001+bceloss.pth'
-             './model/baseline/2021_08_16+resnest50+resnest50++100+0.001+0.001+bceloss.pth',
-            # './model/two_stream/2021_05_26+inceptionv3+inceptionv3++100+0.001+0.001+bceloss.pth',
-            #  './model/two_stream/2021_08_10+scnet50+scnet50++100+0.001+0.001+bceloss.pth',
-             './model/two_stream/2021_08_12+resnest50+resnest50++100+0.001+0.001+bceloss.pth',
-
-             # './model/two_stream/2021_05_26+scnet50+scnet50++100+0.001+0.001+bceloss.pth',
-             # './model/two_stream/2021_08_10+scnet50+scnet50++100+0.001+0.001+bceloss.pth',
-]
-
-BATCH_SIZE = 8  # RECEIVED_PARAMS["batch_size"]
-WORKERS = 1
-LOSS = 'bceloss'
-
-FUNDUS_IMAGE_SIZE = 224
-OCT_IMAGE_SIZE = 224
-
-AVERAGE = 'weighted'
-
 cols = ['新生血管性AMD', 'PCV', '其他']
 classCount = len(cols)
+data_dir = 'AMD_processed/'
+list_dir = 'AMD_processed/label/new_two_stream/'
 
-data_dir = '/home/hejiawen/datasets/AMD_processed/'
-list_dir = '/home/hejiawen/datasets/AMD_processed/label/new_two_stream/'
+mean = {
+    224 : [0.485, 0.456, 0.406],
+    299 : [0.5, 0.5, 0.5]
+}
+std = {
+    224 : [0.229, 0.224, 0.225],
+    299 : [0.5, 0.5, 0.5]
+}
+
+def get_parser():
+    parser = argparse.ArgumentParser(description='Input hyperparameter of model:')
+    parser.add_argument('--root_path', type=str, default='/home/hejiawen/datasets',
+                            help='The root path of dataset')
+    parser.add_argument('--fundus_model', type=str, default='resnet50',
+                            choices=['resnet18', 'resnet34', 'resnet50', 'resnest50', 'scnet50', 'inceptionv3', 'vgg16', 'vgg19'],
+                            help='The backbone model for Color fundus image')
+    parser.add_argument('--oct_model', type=str, default='resnet50',
+                            choices=['resnet18', 'resnet34', 'resnet50', 'resnest50', 'scnet50', 'inceptionv3', 'vgg16', 'vgg19'],
+                            help='The backbone model for OCT image')
+    parser.add_argument('--two_stream_path', type=str, help='the model file path of two stream model', required=True)
+    parser.add_argument('--fundus_size', type=int, default=224, help='The input size for Color fundus image')
+    parser.add_argument('--oct_size', type=int, default=224, help='The input size for OCT image')
+
+    parser.add_argument('--epoch', type=int, default=500, help = 'The number of training epoch')
+    parser.add_argument('--batch_size', type=int, default=64, help='The size of batch')
+
+    parser.add_argument('--workers', type=int, default=1, help='The number of sub-processes to use for data loading')
+    parser.add_argument('--average', type=str, default='weighted',
+                        choices=['micro', 'macro', 'weighted', 'samples'],
+                        help='the type of averaging performed on the data')
+    parser.add_argument('--momentum', type=float, default=0.9, help='The momentum in optimizer')
+    parser.add_argument('--weight_decay', type=float, default=0.001, help='The weight_decay in optimizer')
+    parser.add_argument('--learning_rate', type=float, default=0.001, help='The learning_rate in optimizer')
+    parser.add_argument('--loss', type=str, default='bceloss', help='The loss function')
+
+    parser.add_argument('--use_gpu', type=int, default=0, choices=[0,1,2,3], help='The GPU on server used', required=True)
+
+    args = parser.parse_args()
+    return args
+
+def pred2int(x):
+    out = []
+    for i in range(len(x)):
+        # print(x[i])
+        out.append([1 if y > 0.5 else 0 for y in x[i]])
+    return out
 
 
 def test(model, test_loader, criterion):
     model.eval()
     y_pred = []
     y_true = []
-    y_pred_prob = []
     tbar = tqdm(test_loader, desc='\r', ncols=100)  # 进度条
-    loss_val = 0
-    loss_val_norm = 0
-    # print(tbar)
-    for batch_idx, (fundus, OCT, target) in enumerate(tbar):
-        fundus, OCT, target = fundus.cuda(), OCT.cuda(), target.cuda()  # fundus.cuda(),target.cuda()
-        # optimizer.zero_grad()
-        output = model(fundus, OCT)
+    loss_test = 0
+    loss_test_norm = 0
+    with torch.no_grad():
+        for batch_idx, (fundus, OCT, target) in enumerate(tbar):
+            fundus, OCT, target = fundus.cuda(), OCT.cuda(), target.cuda()  # fundus.cuda(),target.cuda()
+            # target = torch.tensor(target, dtype=torch.long).clone().detach()
+            target = target.long()
+            output = model(fundus, OCT)
 
-        loss = criterion(output, target)
-        output_faltten = F.softmax(output.cpu(), dim=1)
-        y_pred_prob.extend(output_faltten.data.numpy())
-        output_real = torch.argmax(output_faltten, dim=1)  # 单分类用softmax
+            loss = criterion(output, target)
 
-        output_one_hot = F.one_hot(output_real, classCount)
-        target_one_hot = F.one_hot(target, classCount)
-        y_pred.extend(output_one_hot.numpy())
-        y_true.extend(target_one_hot.data.cpu().numpy())
+            output_real = torch.argmax(output.cpu(), dim=1)  # 单分类用softmax
+            output_one_hot = F.one_hot(output_real, classCount)
+            target_one_hot = F.one_hot(target, classCount)
+            y_pred.extend(output_one_hot.numpy())
+            y_true.extend(target_one_hot.data.cpu().numpy())
 
-        tbar.set_description('Test [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-            batch_idx * len(OCT), len(test_loader.dataset),
-            100. * batch_idx / len(test_loader), loss.item()))
-        loss_val += loss.item()
-        loss_val_norm += 1
+            loss_test += loss.item()
+            loss_test_norm += 1
 
-
-    out_loss = loss_val / loss_val_norm
+    out_loss = loss_test / loss_test_norm
 
     y_pred = np.array(y_pred)
     y_true = np.array(y_true)
-    y_pred_prob = np.array(y_pred_prob)
-    auroc = roc_auc_score(y_true, y_pred_prob, average=AVERAGE)
-    # draw_roc(auroc, y_pred_prob, y_true )
-    f1 = f1_score(y_true, y_pred, average=AVERAGE)
-    precision = precision_score(y_true, y_pred, average=AVERAGE)
-    recall = recall_score(y_true, y_pred, average=AVERAGE)
+    auroc = roc_auc_score(y_true, y_pred, average=args.average)
+
+    y_pred = pred2int(y_pred)
+    f1 = f1_score(y_true, y_pred, average=args.average)
+    precision = precision_score(y_true, y_pred, average=args.average)
+    recall = recall_score(y_true, y_pred, average=args.average)
     kappa = calc_kappa(y_true, y_pred, cols)
     acc = accuracy_score(y_true=y_true, y_pred=y_pred)
 
     avg = (f1 + kappa + auroc + recall) / 4.0
-    print( auroc,',',precision,',', recall,',',f1,',', kappa, ' .... ',acc, avg)
-    # print("AUROC\t=\t", auroc)
-    tbar.close()
-    return avg, out_loss
+    print()
+    print('{:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s}'.
+              format('f1', 'auroc', 'recall', 'precision', 'acc', 'kappa', 'loss'))
+    print('{:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s}'.
+              format(str(round(f1,4)), str(round(auroc,4)), str(round(recall,4)), str(round(precision,4)),
+                     str(round(acc,4)), str(round(kappa,4)), str(round(out_loss,4)) ))
+
+    return avg
 
 
-def main(model_path):
-    # model.input_space = 'RGB'
-    # model.input_size = [3, IMAGE_SIZE, IMAGE_SIZE]
-    # model.input_range = [0, 1]
-    # model.mean = [0.485, 0.456, 0.406]
-    # model.std = [0.229, 0.224, 0.225]
-
-    if 'incep' in model_path:
-        FUNDUS_IMAGE_SIZE = 299
-        OCT_IMAGE_SIZE = 299
-
-        test_OCT_tf = transforms.Compose([
-            Preproc(0.2),
-            Resize(OCT_IMAGE_SIZE),  # 非等比例缩小
-            ToTensor(),
-            transforms.Normalize( [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # resnet和inception不同
-            #
-        ])
-
-        test_fundus_tf = transforms.Compose([
-            Preproc(0.2),
-            Rescale(FUNDUS_IMAGE_SIZE),  # 等比例缩小
-            transforms.CenterCrop(FUNDUS_IMAGE_SIZE),  # 以中心裁剪
-            ToTensor(),
-            transforms.Normalize( [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # resnet和inception不同
-        ])
-
-    else:
-        FUNDUS_IMAGE_SIZE = 224
-        OCT_IMAGE_SIZE = 224
-
-        test_OCT_tf = transforms.Compose([
-            Preproc(0.2),
-            Resize(OCT_IMAGE_SIZE),  # 非等比例缩小
-            ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
-            #
-        ])
-
-        test_fundus_tf = transforms.Compose([
-            Preproc(0.2),
-            Rescale(FUNDUS_IMAGE_SIZE),  # 等比例缩小
-            transforms.CenterCrop(FUNDUS_IMAGE_SIZE),  # 以中心裁剪
-            ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # resnet和inception不同
-        ])
+def main():
 
 
+    test_OCT_tf = transforms.Compose([
+        Resize(args.oct_size),
+        ToTensor(),
+        transforms.Normalize(mean=mean[args.oct_size], std=std[args.oct_size])
+    ])
+    test_fundus_tf = transforms.Compose([
+        Resize(args.fundus_size),
+        ToTensor(),
+        transforms.Normalize(mean=mean[args.fundus_size], std=std[args.fundus_size])
+    ])
 
     test_loader = torch.utils.data.DataLoader(
         TwoStreamDataset(data_dir, 'test', test_fundus_tf, test_OCT_tf, classCount, list_dir=list_dir),
-        batch_size=BATCH_SIZE, shuffle=False,
-        num_workers=WORKERS, pin_memory=True, drop_last=True
+        batch_size=args.batch_size, shuffle=False,
+        num_workers=args.workers, pin_memory=True, drop_last=False
     )
 
-    # if RESUME:
-    #     model = torch.load(model_path)
-
-    model = torch.load(model_path)
-    # print(model)
-    # return
+    model = torch.load(args.two_stream_path)
     model = model.cuda()
 
     criterion = nn.CrossEntropyLoss()
 
-    avg, loss = test(model, test_loader, criterion)
-    # print('avg:', avg, 'loss:', loss)
-
+    avg = test(model, test_loader, criterion)
 
 if __name__ == '__main__':
-    import time
-
+    args = get_parser()
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.use_gpu)
+    data_dir = os.path.join(args.root_path, data_dir)
+    list_dir = os.path.join(args.root_path, list_dir)
+    # writer = SummaryWriter(os.path.join('runs', 'OCT/' + model_name[:-4]))
+    print("Test Two Stream ")
     start = time.time()
-    for model_path in MODEL_PATHS:
-        print("Test two_stream:", model_path)
-        main(model_path)
+    main()
     end = time.time()
-    print('总耗时', end - start)
+    print('Finish Two Stream, Time=', end - start)
+
