@@ -23,8 +23,12 @@ def pretrain_models(model_name = 'resnet50', inner_feature=1000 ,lock_weight = F
     if (lock_weight == True):
         for p in model.parameters():
             p.requires_grad = False
-    kernel_count = model.fc.in_features
-    model.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
+    if 'vgg' in model_name:
+        model.classifier[3] = nn.Linear(in_features=4096, out_features=inner_feature, bias=True)
+        model.classifier = model.classifier[:5]
+    else:
+        kernel_count = model.fc.in_features
+        model.fc = nn.Sequential(nn.Linear(kernel_count, inner_feature))
     return model
 
 def load_models(model_path, model_name = 'resnet50',label_type ='single-label', inner_feature=1000 ,lock_weight = False):
