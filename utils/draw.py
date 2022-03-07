@@ -1,6 +1,6 @@
 # 引入必要的库
 from typing import List
-
+import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import cycle
@@ -9,7 +9,8 @@ from sklearn.metrics import roc_curve, auc
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import label_binarize
 from sklearn.multiclass import OneVsRestClassifier
-from scipy import interp
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import os
 from PIL import Image
 import torch
@@ -139,6 +140,55 @@ def draw_CAM(model, img_path, save_path, transform=None, visual_heatmap=False):
     superimposed_img = heatmap * 0.4 + img  # 这里的0.4是热力图强度因子
     cv2.imwrite(save_path, superimposed_img)  # 将图像保存到硬盘
 
-def draw_confusion_matrix(y_pred : np.array, y_true : np.array) -> List[List[int]]:
+def draw_ConfusionMatrix(y_pred, y_ture, labels):
+    plt.rcParams['figure.figsize'] = (8.0, 6.0)
+    # 得到混淆矩阵(confusion matrix,简称cm)
+    # confusion_matrix 需要的参数：y_true(真实标签),y_pred(预测标签)
+    cm = confusion_matrix(y_true=y_ture, y_pred=y_pred)
 
-    output_real = torch.argmax(F.softmax(output.cpu(), dim=1), dim=1)
+    # 打印混淆矩阵
+    print("Confusion Matrix: ")
+    print(cm)
+
+    # 画出混淆矩阵
+    # ConfusionMatrixDisplay 需要的参数: confusion_matrix(混淆矩阵), display_labels(标签名称列表)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+    disp.plot()
+    plt.savefig(f"ConfusionMatrix-{datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}-UnNorm.jpg")
+    # plt.show()
+
+    cm = confusion_matrix(y_true=y_ture, y_pred=y_pred, normalize='true')
+
+    # 打印混淆矩阵
+    print("Confusion Matrix: ")
+    print(cm)
+
+    # 画出混淆矩阵
+    # ConfusionMatrixDisplay 需要的参数: confusion_matrix(混淆矩阵), display_labels(标签名称列表)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+    disp.plot()
+    plt.savefig(f"ConfusionMatrix-{datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}-Norm-True.jpg")
+
+    cm = confusion_matrix(y_true=y_ture, y_pred=y_pred, normalize='pred')
+
+    # 打印混淆矩阵
+    print("Confusion Matrix: ")
+    print(cm)
+
+    # 画出混淆矩阵
+    # ConfusionMatrixDisplay 需要的参数: confusion_matrix(混淆矩阵), display_labels(标签名称列表)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+    disp.plot()
+    plt.savefig(f"ConfusionMatrix-{datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}-Norm-Pred.jpg")
+
+    cm = confusion_matrix(y_true=y_ture, y_pred=y_pred, normalize='all')
+
+    # 打印混淆矩阵
+    print("Confusion Matrix: ")
+    print(cm)
+
+    # 画出混淆矩阵
+    # ConfusionMatrixDisplay 需要的参数: confusion_matrix(混淆矩阵), display_labels(标签名称列表)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+    disp.plot()
+    plt.savefig(f"ConfusionMatrix-{datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}-Norm-All.jpg")

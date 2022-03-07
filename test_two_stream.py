@@ -13,10 +13,10 @@ from tqdm import tqdm
 from data.base_dataset import Preproc, Rescale, ToTensor, Resize
 from data.csv_dataset import TwoStreamDataset
 from utils.utils import calc_kappa
-from utils.draw import draw_roc
+from utils.draw import draw_roc, draw_ConfusionMatrix
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-cols = ['新生血管性AMD', 'PCV', '其他']
+cols = ['Neovascular AMD', 'PCV', 'Others']
 classCount = len(cols)
 data_dir = 'AMD_processed/'
 list_dir = 'AMD_processed/label/new_two_stream/'
@@ -66,7 +66,7 @@ def pred2int(x):
     for i in range(len(x)):
         # print(x[i])
         out.append([1 if y > 0.5 else 0 for y in x[i]])
-    return out
+    return np.array(out)
 
 
 def test(model, test_loader, criterion):
@@ -114,7 +114,7 @@ def test(model, test_loader, criterion):
     print('{:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s}'.
               format(str(round(f1,4)), str(round(auroc,4)), str(round(recall,4)), str(round(precision,4)),
                      str(round(acc,4)), str(round(kappa,4)), str(round(out_loss,4)) ))
-
+    draw_ConfusionMatrix(y_pred.argmax(axis=1), y_true.argmax(axis=1), cols)
     return avg
 
 

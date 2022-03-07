@@ -56,6 +56,10 @@ class TwoStreamNet(nn.Module):
     def forward(self, x1, x2):
         x1 = self.model1(x1)
         x2 = self.model2(x2)
+        if len(x1) == 2:
+            x1 = x1[0]
+        if len(x2) == 2:
+            x2 = x2[0]
         x = self.fc(torch.cat((x1, x2), 1))
         return x
 

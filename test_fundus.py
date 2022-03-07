@@ -15,6 +15,7 @@ from sklearn.metrics import cohen_kappa_score, f1_score, roc_auc_score, recall_s
     hamming_loss
 from data.base_dataset import Preproc, Rescale, RandomCrop, ToTensor, Normalization, Resize, ImgTrans
 from data.csv_dataset import ImageDataset
+from utils.utils import Cal_Threshold
 # from torch.utils.tensorboard import SummaryWriter
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -77,12 +78,12 @@ def get_parser():
     args = parser.parse_args()
     return args
 
-def pred2int(x):
+def pred2int(x, thresholds):
     out = []
     for i in range(len(x)):
         # print(x[i])
-        out.append([1 if y > 0.5 else 0 for y in x[i]])
-    return out
+        out.append([1 if y > thresholds[j] else 0 for j, y in enumerate(x[i])] )
+    return np.array(out)
 
 
 def test(model, val_loader, criterion):
@@ -113,8 +114,8 @@ def test(model, val_loader, criterion):
     y_true = np.array(y_true)
     auroc = roc_auc_score(y_true, y_pred, average=args.average)
     # kappa = calc_kappa(y_true, y_pred, cols)
-
-    y_pred = pred2int(y_pred)
+    thresholds = Cal_Threshold(y_true, y_pred)
+    y_pred = pred2int(y_pred, thresholds)
     # sw = compute_sample_weight(class_weight='balanced', y=y_true)
 
     f1 = f1_score(y_true, y_pred, average=args.average)
@@ -173,7 +174,7 @@ if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.use_gpu)
     data_dir = os.path.join(args.root_path, data_dir)
     list_dir = os.path.join(args.root_path, list_dir)
-    print("Test fundus ")
+    print(f"Test fundus {args.fundus_path}")
     start = time.time()
     main()
     end = time.time()

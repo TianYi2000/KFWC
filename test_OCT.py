@@ -15,6 +15,8 @@ from sklearn.metrics import cohen_kappa_score, f1_score, roc_auc_score, recall_s
     hamming_loss
 from data.base_dataset import Preproc, Rescale, RandomCrop, ToTensor, Normalization, Resize, ImgTrans
 from data.csv_dataset import ImageDataset
+from utils.draw import draw_ConfusionMatrix
+from utils.utils import Cal_Threshold
 # from torch.utils.tensorboard import SummaryWriter
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -77,12 +79,12 @@ def get_parser():
     args = parser.parse_args()
     return args
 
-def pred2int(x):
+def pred2int(x, thresholds):
     out = []
     for i in range(len(x)):
         # print(x[i])
-        out.append([1 if y > 0.5 else 0 for y in x[i]])
-    return out
+        out.append([1 if y > thresholds[j] else 0 for j, y in enumerate(x[i])] )
+    return np.array(out)
 
 
 def test(model, val_loader, criterion):
@@ -114,9 +116,10 @@ def test(model, val_loader, criterion):
     auroc = roc_auc_score(y_true, y_pred, average=args.average)
     # kappa = calc_kappa(y_true, y_pred, cols)
 
-    y_pred = pred2int(y_pred)
-    # sw = compute_sample_weight(class_weight='balanced', y=y_true)
+    thresholds = Cal_Threshold(y_true, y_pred)
 
+    y_pred = pred2int(y_pred, thresholds)
+    # sw = compute_sample_weight(class_weight='balanced', y=y_true)
     f1 = f1_score(y_true, y_pred, average=args.average)
     precision = precision_score(y_true, y_pred, average=args.average)
     recall = recall_score(y_true, y_pred, average=args.average)
@@ -136,7 +139,7 @@ def test(model, val_loader, criterion):
     print()
     print('{:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s}'.format('f1', 'auroc', 'recall', 'precision', 'acc', 'avg', 'hamming', 'loss'))
     print('{:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s} {:10s}'.format(str(round(f1,4)), str(round(auroc,4)), str(round(recall,4)), str(round(precision,4)), str(round(acc,4)), str(round(avg,4)), str(round(hamming,4)), str(round(out_loss,4)) ))
-
+    # draw_ConfusionMatrix(y_pred, y_true, cols)
     # print(f1, auroc, recall, precision, acc, avg, hamming)
     return avg
 
@@ -174,7 +177,7 @@ if __name__ == '__main__':
     data_dir = os.path.join(args.root_path, data_dir)
     list_dir = os.path.join(args.root_path, list_dir)
     # writer = SummaryWriter(os.path.join('runs', 'OCT/' + model_name[:-4]))
-    print("Test OCT ")
+    print(f"Test OCT {args.oct_path}")
     start = time.time()
     main()
     end = time.time()

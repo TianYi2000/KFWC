@@ -31,7 +31,8 @@ pre_models = \
          "scnet50": scnet50,
          "inceptionv3": models.inception_v3,
          "vgg16": models.vgg16,
-         "vgg19": models.vgg19}
+         "vgg19": models.vgg19,
+         "moco" : models.resnet50}
 
 mean = {
     224 : [0.485, 0.456, 0.406],
@@ -47,11 +48,11 @@ def get_parser():
     parser.add_argument('--root_path', type=str, default='/home/hejiawen/datasets',
                             help='The root path of dataset')
     parser.add_argument('--fundus_model', type=str, default='resnet50',
-                            choices=['resnet18', 'resnet34', 'resnet50', 'resnest50', 'scnet50', 'inceptionv3', 'vgg16', 'vgg19'],
-                            help='The backbone model for Color fundus image')
+                            choices=['resnet18', 'resnet34', 'resnet50', 'resnest50', 'scnet50', 'inceptionv3', 'vgg16',
+                                     'vgg19', 'moco'], help='The backbone model for Color fundus image')
     parser.add_argument('--oct_model', type=str, default='resnet50',
-                            choices=['resnet18', 'resnet34', 'resnet50', 'resnest50', 'scnet50', 'inceptionv3', 'vgg16', 'vgg19'],
-                            help='The backbone model for OCT image')
+                            choices=['resnet18', 'resnet34', 'resnet50', 'resnest50', 'scnet50', 'inceptionv3', 'vgg16',
+                                     'vgg19', 'moco'], help='The backbone model for OCT image')
 
     parser.add_argument('--fundus_size', type=int, default=224, help='The input size for Color fundus image')
     parser.add_argument('--oct_size', type=int, default=224, help='The input size for OCT image')
@@ -95,6 +96,9 @@ def train(model, train_loader, optimizer, scheduler, criterion, epoch, log):
         data, target = inputs.cuda(), target.cuda()
         optimizer.zero_grad()
         output = model(data)
+        if 'inception' in args.fundus_model:   #inception net 's output contains both hidden and output
+            new_output, hidden = output
+            output = new_output
         loss = criterion(output, target)
         loss.backward()
         optimizer.step()
@@ -199,6 +203,19 @@ def  main():
         model.classifier[3] = nn.Linear(in_features=4096, out_features=1000, bias=True)
         model.classifier[-1] = nn.Linear(in_features=1000, out_features=classCount, bias=True)
         model.classifier.add_module(f'{len(model.classifier)}',nn.Sigmoid())
+    elif 'moco' in args.fundus_model:
+        checkpoint = torch.load('model/pre_train/moco_v2_800ep_pretrain.pth.tar')
+        weights = checkpoint['state_dict']
+        keys = list(weights.keys())
+        for key in keys:
+            if 'module.encoder_q' in key:
+                new_key = key.replace('module.encoder_q.', '')
+                weights[new_key] = weights[key]
+                del weights[key]
+        kernel_count = model.fc.weight.shape[1]
+        model.fc = nn.Sequential(nn.Linear(kernel_count, kernel_count), nn.ReLU(), nn.Linear(kernel_count, 128),\
+                                 nn.ReLU(), nn.Linear(128, classCount), nn.Sigmoid())
+        model.load_state_dict(weights, strict=False)
     else:
         kernel_count = model.fc.in_features
         model.fc = nn.Sequential(nn.Linear(kernel_count, classCount), nn.Sigmoid())
@@ -208,13 +225,13 @@ def  main():
         Resize(args.fundus_size),
         transforms.RandomHorizontalFlip(),
         ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=mean[args.fundus_size], std=std[args.fundus_size])
     ])
 
     val_tf = transforms.Compose([
         Resize(args.fundus_size),
         ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=mean[args.fundus_size], std=std[args.fundus_size])
     ])
 
     train_loader = torch.utils.data.DataLoader(

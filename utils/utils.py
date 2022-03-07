@@ -8,7 +8,8 @@ import torchvision.transforms as transforms
 from PIL import Image
 # from munch import munchify
 import numpy as np
-from sklearn.metrics import cohen_kappa_score, f1_score, roc_auc_score, confusion_matrix
+from sklearn import metrics
+from sklearn.metrics import cohen_kappa_score, f1_score, roc_auc_score, confusion_matrix, auc
 import torch.nn.functional as F
 import itertools
 import matplotlib.pyplot as plt
@@ -158,62 +159,62 @@ class ToRange255(object):
         return tensor
 
 
-class TransformImage(object):
-    def __init__(self, opts, scale=0.875, random_crop=False,
-                 random_hflip=False, random_vflip=False,
-                 random_rotate=False, 
-                 preserve_aspect_ratio=True):
-        if type(opts) == dict:
-            opts = munchify(opts)
-        self.input_size = opts.input_size
-        self.input_space = opts.input_space
-        self.input_range = opts.input_range
-        self.mean = opts.mean
-        self.std = opts.std
-
-        # https://github.com/tensorflow/models/blob/master/research/inception/inception/image_processing.py#L294
-        self.scale = scale
-        self.random_crop = random_crop
-        self.random_hflip = random_hflip
-        self.random_vflip = random_vflip
-        self.random_rotate = random_rotate
-        
-        tfs = []
-        
-#         if preserve_aspect_ratio:
-#             tfs.append(transforms.Resize(int(math.floor(max(self.input_size)/self.scale))))
-#         else:
-#             height = int(self.input_size[1] / self.scale)
-#             width = int(self.input_size[2] / self.scale)
-#             tfs.append(transforms.Resize((height, width)))
-
-        if random_crop:
-            tfs.append(transforms.RandomCrop(max(self.input_size)))
-#             tfs.append(transforms.RandomResizedCrop(max(self.input_size),scale=(0.9,1.1)))
-#         else:#不需要centercrop
-#             tfs.append(transforms.CenterCrop(max(self.input_size)))
-
-        if random_hflip:
-            tfs.append(transforms.RandomHorizontalFlip())
-
-        if random_vflip:
-            tfs.append(transforms.RandomVerticalFlip())
-                              
-        if random_rotate:
-            tfs.append(transforms.RandomRotation(180))
-        
-#         tfs.append(transforms.RandomApply(random_tfs,p=0.6))
-        tfs.append(transforms.ToTensor())
-        tfs.append(ToSpaceBGR(self.input_space=='BGR'))
-        tfs.append(ToRange255(max(self.input_range)==255))
-#         tfs.append(transforms.Normalize(mean=self.mean, std=self.std))
-
-        self.tf = transforms.Compose(tfs)
-
-    def __call__(self, img):
-        # print("tensor!")
-        tensor = self.tf(img)
-        return tensor
+# class TransformImage(object):
+#     def __init__(self, opts, scale=0.875, random_crop=False,
+#                  random_hflip=False, random_vflip=False,
+#                  random_rotate=False,
+#                  preserve_aspect_ratio=True):
+#         if type(opts) == dict:
+#             opts = munchify(opts)
+#         self.input_size = opts.input_size
+#         self.input_space = opts.input_space
+#         self.input_range = opts.input_range
+#         self.mean = opts.mean
+#         self.std = opts.std
+#
+#         # https://github.com/tensorflow/models/blob/master/research/inception/inception/image_processing.py#L294
+#         self.scale = scale
+#         self.random_crop = random_crop
+#         self.random_hflip = random_hflip
+#         self.random_vflip = random_vflip
+#         self.random_rotate = random_rotate
+#
+#         tfs = []
+#
+# #         if preserve_aspect_ratio:
+# #             tfs.append(transforms.Resize(int(math.floor(max(self.input_size)/self.scale))))
+# #         else:
+# #             height = int(self.input_size[1] / self.scale)
+# #             width = int(self.input_size[2] / self.scale)
+# #             tfs.append(transforms.Resize((height, width)))
+#
+#         if random_crop:
+#             tfs.append(transforms.RandomCrop(max(self.input_size)))
+# #             tfs.append(transforms.RandomResizedCrop(max(self.input_size),scale=(0.9,1.1)))
+# #         else:#不需要centercrop
+# #             tfs.append(transforms.CenterCrop(max(self.input_size)))
+#
+#         if random_hflip:
+#             tfs.append(transforms.RandomHorizontalFlip())
+#
+#         if random_vflip:
+#             tfs.append(transforms.RandomVerticalFlip())
+#
+#         if random_rotate:
+#             tfs.append(transforms.RandomRotation(180))
+#
+# #         tfs.append(transforms.RandomApply(random_tfs,p=0.6))
+#         tfs.append(transforms.ToTensor())
+#         tfs.append(ToSpaceBGR(self.input_space=='BGR'))
+#         tfs.append(ToRange255(max(self.input_range)==255))
+# #         tfs.append(transforms.Normalize(mean=self.mean, std=self.std))
+#
+#         self.tf = transforms.Compose(tfs)
+#
+#     def __call__(self, img):
+#         # print("tensor!")
+#         tensor = self.tf(img)
+#         return tensor
 
 
 def plot(cm, classes, normalize=False,
@@ -283,3 +284,63 @@ def hamming_score(y_true, y_pred, normalize=True, sample_weight=None):
     return  { 'hamming_score' : np.mean(acc_list) ,
               'subset_accuracy' : sklearn.metrics.accuracy_score(y_true, y_pred, normalize=True, sample_weight=None),
               'hamming_loss' : sklearn.metrics.hamming_loss(y_true, y_pred)}
+
+
+def Find_Optimal_Cutoff(TPR, FPR, threshold):
+    y = TPR - FPR
+    Youden_index = np.argmax(y)
+    # Only the first occurrence is returned.
+    optimal_threshold = threshold[Youden_index]
+    point = [FPR[Youden_index], TPR[Youden_index]]
+    return optimal_threshold, point
+
+def ROC(label, y_prob):
+    """
+    Receiver_Operating_Characteristic, ROC
+    :param label: (n, )
+    :param y_prob: (n, )
+    :return: fpr, tpr, roc_auc, optimal_th, optimal_point
+    """
+    fpr, tpr, thresholds = metrics.roc_curve(label, y_prob)
+    roc_auc = metrics.auc(fpr, tpr)
+    optimal_th, optimal_point = Find_Optimal_Cutoff(TPR=tpr, FPR=fpr, threshold=thresholds)
+    return fpr, tpr, roc_auc, optimal_th, optimal_point
+
+def Cal_Threshold(Y_TURE, Y_PRED):
+    labels_num = Y_PRED.shape[1]
+    assert (type(labels_num) == int)
+    OPTIMAL_TH = []
+    for label_index in range(labels_num):
+        y_true = Y_TURE[:, label_index]
+        y_pred = Y_PRED[:, label_index]
+        fpr, tpr, roc_auc, optimal_th, optimal_point = ROC(y_true, y_pred)
+
+        plt.figure(1)
+        plt.plot(fpr, tpr, label=f"AUC = {roc_auc:.3f}")
+        plt.plot([0, 1], [0, 1], linestyle="--")
+        plt.plot(optimal_point[0], optimal_point[1], marker='o', color='r')
+        plt.text(optimal_point[0], optimal_point[1], f'Threshold:{optimal_th:.2f}')
+        plt.title(f"ROC-AUC-{label_index}")
+        plt.xlabel("False Positive Rate")
+        plt.ylabel("True Positive Rate")
+        plt.legend()
+        plt.show()
+        OPTIMAL_TH.append(optimal_th)
+
+    return OPTIMAL_TH
+
+if __name__ == '__main__':
+    y_true = [1, 0, 0, 1, 0, 1, 0]
+    y_pred = [0.9, 0.2, 0.1, 0.4, 0.5, 0.95, 0.35]
+    fpr, tpr, roc_auc, optimal_th, optimal_point = ROC(y_true, y_pred)
+
+    plt.figure(1)
+    plt.plot(fpr, tpr, label=f"AUC = {roc_auc:.3f}")
+    plt.plot([0, 1], [0, 1], linestyle="--")
+    plt.plot(optimal_point[0], optimal_point[1], marker='o', color='r')
+    plt.text(optimal_point[0], optimal_point[1], f'Threshold:{optimal_th:.2f}')
+    plt.title("ROC-AUC")
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.legend()
+    plt.show()
