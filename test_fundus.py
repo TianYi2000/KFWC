@@ -78,7 +78,7 @@ def get_parser():
     args = parser.parse_args()
     return args
 
-def pred2int(x, thresholds):
+def pred2int(x, thresholds = [0.5, 0.5, 0.5, 0.5, 0.5]):
     out = []
     for i in range(len(x)):
         # print(x[i])
@@ -115,7 +115,7 @@ def test(model, val_loader, criterion):
     auroc = roc_auc_score(y_true, y_pred, average=args.average)
     # kappa = calc_kappa(y_true, y_pred, cols)
     thresholds = Cal_Threshold(y_true, y_pred)
-    y_pred = pred2int(y_pred, thresholds)
+    y_pred = pred2int(y_pred)
     # sw = compute_sample_weight(class_weight='balanced', y=y_true)
 
     f1 = f1_score(y_true, y_pred, average=args.average)
