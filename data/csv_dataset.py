@@ -1,4 +1,5 @@
 from torch.utils.data import Dataset
+from torchvision import transforms
 from os.path import join, exists
 import numpy as np
 from torch import from_numpy, sort
@@ -78,7 +79,7 @@ class Lesion_Complaint_Dataset(Dataset):
         self.read_lists()   # 读取数据集
 
     def __getitem__(self, index):
-        data = Image.open(join(self.data_dir, self.image_list[index]))
+        data = self.image_list[index]
         data = data.convert('RGB')
         data = self.transforms(data)
         lesion_token = self.lesion_tokens[index]
@@ -113,7 +114,9 @@ class Lesion_Complaint_Dataset(Dataset):
             self.complaint_tokens = list()
             self.label_list = list()
             for line in data:
-                self.image_list.append(line[0])
+                data = Image.open(join(self.data_dir, line[0]))
+                data = data.resize((299,299))
+                self.image_list.append(data)
 
                 if line[1] == 'CNV':
                     self.label_list.append(0)   #[1,0,0]

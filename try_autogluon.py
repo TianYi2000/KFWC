@@ -16,10 +16,10 @@ from sklearn.metrics import cohen_kappa_score, f1_score, roc_auc_score, recall_s
     hamming_loss
 import time
 import torch.nn.functional as F
-from net.three_stream import Single_Image_Net
+from net.three_stream import Single_Complaint_Net
 import cv2
 from transformers import BertModel, BertConfig, BertTokenizer, AdamW, get_cosine_schedule_with_warmup
-
+import autogluon.core as ag
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 cols = ['新生血管性AMD', 'PCV', '其他']
@@ -91,7 +91,7 @@ def train(model, train_loader, optimizer, scheduler, criterion, epoch, log):
             lesion_id.cuda(), lesion_mask.cuda(), lesion_type.cuda(), complaint_id.cuda(), complaint_mask.cuda(), complaint_type.cuda()
         target = target.long()
         optimizer.zero_grad()
-        output = model(image)
+        output = model(image, lesion_id, lesion_mask, lesion_type)
         loss = criterion(output, target)
         loss.backward()
         #optimizer.step()通常用在每个mini-batch之中，而scheduler.step()通常用在epoch里面
@@ -116,12 +116,12 @@ def train(model, train_loader, optimizer, scheduler, criterion, epoch, log):
 
     y_pred = np.array(y_pred)
     y_true = np.array(y_true)
-    auroc = roc_auc_score(y_true, y_pred, average=args.average)
+    auroc = roc_auc_score(y_true, y_pred, average=myargs.average)
 
     y_pred = pred2int(y_pred)
-    f1 = f1_score(y_true, y_pred, average=args.average)
-    precision = precision_score(y_true, y_pred, average=args.average)
-    recall = recall_score(y_true, y_pred, average=args.average)
+    f1 = f1_score(y_true, y_pred, average=myargs.average)
+    precision = precision_score(y_true, y_pred, average=myargs.average)
+    recall = recall_score(y_true, y_pred, average=myargs.average)
     kappa = calc_kappa(y_true, y_pred, cols)
     acc = accuracy_score(y_true=y_true, y_pred=y_pred)
 
@@ -149,7 +149,7 @@ def val(model, val_loader, criterion, epoch, log):
                 lesion_id.cuda(), lesion_mask.cuda(), lesion_type.cuda(), complaint_id.cuda(), complaint_mask.cuda(), complaint_type.cuda()
             # target = torch.tensor(target, dtype=torch.long).clone().detach()
             target = target.long()
-            output = model(image)
+            output = model(image, lesion_id, lesion_mask, lesion_type)
 
             loss = criterion(output, target)
 
@@ -169,12 +169,12 @@ def val(model, val_loader, criterion, epoch, log):
 
     y_pred = np.array(y_pred)
     y_true = np.array(y_true)
-    auroc = roc_auc_score(y_true, y_pred, average=args.average)
+    auroc = roc_auc_score(y_true, y_pred, average=myargs.average)
 
     y_pred = pred2int(y_pred)
-    f1 = f1_score(y_true, y_pred, average=args.average)
-    precision = precision_score(y_true, y_pred, average=args.average)
-    recall = recall_score(y_true, y_pred, average=args.average)
+    f1 = f1_score(y_true, y_pred, average=myargs.average)
+    precision = precision_score(y_true, y_pred, average=myargs.average)
+    recall = recall_score(y_true, y_pred, average=myargs.average)
     kappa = calc_kappa(y_true, y_pred, cols)
     acc = accuracy_score(y_true=y_true, y_pred=y_pred)
 
@@ -188,36 +188,39 @@ def val(model, val_loader, criterion, epoch, log):
 
     return avg
 
-
-def main():
-    model = Single_Image_Net(image_model=args.oct_model)
+@ag.args(
+    lr=ag.space.Real(1e-5, 1e-3, log=True),
+    wd=ag.space.Real(1e-5, 1e-3, log=True))
+def main(args):
+    print('lr: {}, wd: {}'.format(args.lr, args.wd))
+    model = Single_Complaint_Net(image_model=myargs.oct_model)
 
 
     train_tf = transforms.Compose([
-        Resize(args.oct_size),
+        Resize(myargs.oct_size),
         transforms.RandomHorizontalFlip(),
         ToTensor(),
-        transforms.Normalize(mean=mean[args.oct_size], std=std[args.oct_size])
+        transforms.Normalize(mean=mean[myargs.oct_size], std=std[myargs.oct_size])
     ])
     val_tf = transforms.Compose([
-        Resize(args.oct_size),
+        Resize(myargs.oct_size),
         ToTensor(),
-        transforms.Normalize(mean=mean[args.oct_size], std=std[args.oct_size])
+        transforms.Normalize(mean=mean[myargs.oct_size], std=std[myargs.oct_size])
     ])
     train_loader = torch.utils.data.DataLoader(
         Lesion_Complaint_Dataset(data_dir, 'train', train_tf, classCount, lesion_num, lesion_text, list_dir=list_dir),
-        batch_size=args.batch_size, shuffle=True,
-        num_workers=args.workers, pin_memory=True, drop_last=False
+        batch_size=myargs.batch_size, shuffle=True,
+        num_workers=myargs.workers, pin_memory=True, drop_last=False
     )
     val_loader = torch.utils.data.DataLoader(
         Lesion_Complaint_Dataset(data_dir, 'val', val_tf, classCount, lesion_num, lesion_text, list_dir=list_dir),
-        batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True, drop_last=False
+        batch_size=myargs.batch_size, shuffle=False,
+        num_workers=myargs.workers, pin_memory=True, drop_last=False
     )
 
     # if RESUME:
     #     model = torch.load(model_path)
-    if ',' in args.use_gpu:
+    if ',' in myargs.use_gpu:
         torch.distributed.init_process_group(backend="nccl")
         model = model.cuda()
         model = nn.parallel.DistributedDataParallel(model)
@@ -226,38 +229,38 @@ def main():
 
 
     criterion = nn.CrossEntropyLoss()
-    # optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=args.learning_rate,
-    #                       momentum=args.momentum,
-    #                       weight_decay=args.weight_decay)
+    # optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=myargs.learning_rate,
+    #                       momentum=myargs.momentum,
+    #                       weight_decay=myargs.weight_decay)
     # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=0, last_epoch=-1)
-    optimizer = AdamW(model.parameters(), lr=2e-5, weight_decay=1e-4) #AdamW优化器
+    optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=args.wd) #AdamW优化器
     scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=len(train_loader),
-                                            num_training_steps=args.epoch*len(train_loader))
+                                            num_training_steps=myargs.epoch*len(train_loader))
 
 
-    train_log = open('logs/single_image/'+ model_name + '-train.log', 'w')
-    val_log = open('logs/single_image/'+ model_name + '-val.log', 'w')
+    train_log = open('logs/single_lesion/'+ model_name + '-train.log', 'w')
+    val_log = open('logs/single_lesion/'+ model_name + '-val.log', 'w')
     max_avg = 0
 
-    for epoch in range(0, args.epoch):
+    for epoch in range(0, myargs.epoch):
         train(model, train_loader, optimizer, scheduler, criterion, epoch, train_log)
         avg = val(model, val_loader, criterion, epoch, val_log)
 
         if avg > max_avg:
-            torch.save(model, './model/single_image/' + model_name + '.pth')
+            torch.save(model, './model/single_lesion/' + model_name + '.pth')
             max_avg = avg
 
 
 if __name__ == '__main__':
-    args = get_parser()
-    NAME = str(args.epoch) + "+" + str(args.learning_rate) + '+' + str(args.weight_decay) + '+' + args.loss
-    model_name = datetime.datetime.now().strftime('%Y-%m-%d') + '+' + args.oct_model + '+' + NAME
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.use_gpu
-    data_dir = os.path.join(args.root_path, data_dir)
-    list_dir = os.path.join(args.root_path, list_dir)
+    myargs = get_parser()
+    NAME = str(myargs.epoch) + "+" + str(myargs.learning_rate) + '+' + str(myargs.weight_decay) + '+' + myargs.loss
+    model_name = datetime.datetime.now().strftime('%Y-%m-%d') + '+' + myargs.oct_model + '+' + NAME
+    os.environ["CUDA_VISIBLE_DEVICES"] = myargs.use_gpu
+    data_dir = os.path.join(myargs.root_path, data_dir)
+    list_dir = os.path.join(myargs.root_path, list_dir)
     # writer = SummaryWriter(os.path.join('runs', 'OCT/' + model_name[:-4]))
-    print("Train Single Image Net ", model_name)
+    print("Train Single Lesion Net ", model_name)
     start = time.time()
     main()
     end = time.time()
-    print('Finish Single Image Net, Time=', end - start)
+    print('Finish Single Lesion Net, Time=', end - start)

@@ -251,7 +251,7 @@ def main():
 if __name__ == '__main__':
     args = get_parser()
     NAME = str(args.epoch) + "+" + str(args.learning_rate) + '+' + str(args.weight_decay) + '+' + args.loss
-    model_name = datetime.datetime.now().strftime('%Y-%m-%d') + '+' + args.fundus_model + '+' + args.oct_model + '+' + NAME
+    model_name = datetime.datetime.now().strftime('%Y-%m-%d') + '+' + args.oct_model + '+' + NAME
     os.environ["CUDA_VISIBLE_DEVICES"] = args.use_gpu
     data_dir = os.path.join(args.root_path, data_dir)
     list_dir = os.path.join(args.root_path, list_dir)

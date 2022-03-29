@@ -24,8 +24,13 @@ class Bert_Model(nn.Module):
         # self.fc = nn.Linear(self.config.hidden_size, classes)  # 直接分类
 
 
+        # for name ,param in self.bert.named_parameters():
+        #     param.requires_grad = False
+
+
     def forward(self, input_ids, attention_mask=None, token_type_ids=None):
         outputs = self.bert(input_ids, attention_mask, token_type_ids)
         out_pool = outputs[1]   # 池化后的输出 [bs, config.hidden_size]
         # logit = self.fc(out_pool)   #  [bs, classes]
-        return out_pool
+        x = out_pool.detach()  #锁Bert权重
+        return x
