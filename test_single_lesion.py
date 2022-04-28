@@ -21,7 +21,7 @@ lesion_text = ['视网膜内液性暗腔','视网膜下积液','RPE脱离','RPE�
 classCount = len(cols)
 lesion_num = len(lesion_text)
 data_dir = 'AMD_processed/'
-list_dir = '主诉/saved-OCT图像-疾病-体征-主诉/'
+list_dir = '主诉/saved-OCT图像-疾病-体征-主诉-重新配对主诉/'
 
 mean = {
     224 : [0.485, 0.456, 0.406],

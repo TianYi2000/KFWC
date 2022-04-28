@@ -19,7 +19,7 @@ import torch.nn.functional as F
 from net.three_stream import Single_Complaint_Net
 import cv2
 from transformers import BertModel, BertConfig, BertTokenizer, AdamW, get_cosine_schedule_with_warmup
-import autogluon as ag
+
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 cols = ['新生血管性AMD', 'PCV', '其他']
@@ -27,7 +27,7 @@ lesion_text = ['视网膜内液性暗腔','视网膜下积液','RPE脱离','RPE�
 classCount = len(cols)
 lesion_num = len(lesion_text)
 data_dir = 'AMD_processed/'
-list_dir = '主诉/saved-OCT图像-疾病-体征-主诉/'
+list_dir = '主诉/saved-OCT图像-疾病-体征-主诉-重新配对主诉/'
 
 mean = {
     224 : [0.485, 0.456, 0.406],
@@ -59,10 +59,11 @@ def get_parser():
                         choices=['micro', 'macro', 'weighted', 'samples'],
                         help='the type of averaging performed on the data')
     parser.add_argument('--momentum', type=float, default=0.9, help='The momentum in optimizer')
-    parser.add_argument('--weight_decay', type=float, default=0.001, help='The weight_decay in optimizer')
+    parser.add_argument('--weight_decay', type=float, default=0.0001, help='The weight_decay in optimizer')
     parser.add_argument('--learning_rate', type=float, default=0.001, help='The learning_rate in optimizer')
     parser.add_argument('--loss', type=str, default='bceloss', help='The loss function')
-
+    parser.add_argument('--text_model', type=str,default='bert', help='text model')
+    parser.add_argument('--lock_text_weight', action='store_true', help='lock_text_weight')
     parser.add_argument('--use_gpu', type=str, default='2,3', help='The GPU on server used')
     parser.add_argument('--local_rank', default=-1, type=int,help='node rank for distributed training')
 
@@ -91,7 +92,7 @@ def train(model, train_loader, optimizer, scheduler, criterion, epoch, log):
             lesion_id.cuda(), lesion_mask.cuda(), lesion_type.cuda(), complaint_id.cuda(), complaint_mask.cuda(), complaint_type.cuda()
         target = target.long()
         optimizer.zero_grad()
-        output = model(image, lesion_id, lesion_mask, lesion_type)
+        output = model(image, complaint_id, complaint_mask, complaint_type)
         loss = criterion(output, target)
         loss.backward()
         #optimizer.step()通常用在每个mini-batch之中，而scheduler.step()通常用在epoch里面
@@ -116,12 +117,12 @@ def train(model, train_loader, optimizer, scheduler, criterion, epoch, log):
 
     y_pred = np.array(y_pred)
     y_true = np.array(y_true)
-    auroc = roc_auc_score(y_true, y_pred, average=myargs.average)
+    auroc = roc_auc_score(y_true, y_pred, average=args.average)
 
     y_pred = pred2int(y_pred)
-    f1 = f1_score(y_true, y_pred, average=myargs.average)
-    precision = precision_score(y_true, y_pred, average=myargs.average)
-    recall = recall_score(y_true, y_pred, average=myargs.average)
+    f1 = f1_score(y_true, y_pred, average=args.average)
+    precision = precision_score(y_true, y_pred, average=args.average)
+    recall = recall_score(y_true, y_pred, average=args.average)
     kappa = calc_kappa(y_true, y_pred, cols)
     acc = accuracy_score(y_true=y_true, y_pred=y_pred)
 
@@ -149,7 +150,7 @@ def val(model, val_loader, criterion, epoch, log):
                 lesion_id.cuda(), lesion_mask.cuda(), lesion_type.cuda(), complaint_id.cuda(), complaint_mask.cuda(), complaint_type.cuda()
             # target = torch.tensor(target, dtype=torch.long).clone().detach()
             target = target.long()
-            output = model(image, lesion_id, lesion_mask, lesion_type)
+            output = model(image, complaint_id, complaint_mask, complaint_type)
 
             loss = criterion(output, target)
 
@@ -169,12 +170,12 @@ def val(model, val_loader, criterion, epoch, log):
 
     y_pred = np.array(y_pred)
     y_true = np.array(y_true)
-    auroc = roc_auc_score(y_true, y_pred, average=myargs.average)
+    auroc = roc_auc_score(y_true, y_pred, average=args.average)
 
     y_pred = pred2int(y_pred)
-    f1 = f1_score(y_true, y_pred, average=myargs.average)
-    precision = precision_score(y_true, y_pred, average=myargs.average)
-    recall = recall_score(y_true, y_pred, average=myargs.average)
+    f1 = f1_score(y_true, y_pred, average=args.average)
+    precision = precision_score(y_true, y_pred, average=args.average)
+    recall = recall_score(y_true, y_pred, average=args.average)
     kappa = calc_kappa(y_true, y_pred, cols)
     acc = accuracy_score(y_true=y_true, y_pred=y_pred)
 
@@ -188,39 +189,36 @@ def val(model, val_loader, criterion, epoch, log):
 
     return avg
 
-@ag.args(
-    lr=ag.space.Real(1e-5, 1e-3, log=True),
-    wd=ag.space.Real(1e-5, 1e-3, log=True))
-def main(args):
-    print('lr: {}, wd: {}'.format(args.lr, args.wd))
-    model = Single_Complaint_Net(image_model=myargs.oct_model)
+
+def main():
+    model = Single_Complaint_Net(image_model=args.oct_model, lock_text_weight = args.lock_text_weight)
 
 
     train_tf = transforms.Compose([
-        Resize(myargs.oct_size),
+        Resize(args.oct_size),
         transforms.RandomHorizontalFlip(),
         ToTensor(),
-        transforms.Normalize(mean=mean[myargs.oct_size], std=std[myargs.oct_size])
+        transforms.Normalize(mean=mean[args.oct_size], std=std[args.oct_size])
     ])
     val_tf = transforms.Compose([
-        Resize(myargs.oct_size),
+        Resize(args.oct_size),
         ToTensor(),
-        transforms.Normalize(mean=mean[myargs.oct_size], std=std[myargs.oct_size])
+        transforms.Normalize(mean=mean[args.oct_size], std=std[args.oct_size])
     ])
     train_loader = torch.utils.data.DataLoader(
         Lesion_Complaint_Dataset(data_dir, 'train', train_tf, classCount, lesion_num, lesion_text, list_dir=list_dir),
-        batch_size=myargs.batch_size, shuffle=True,
-        num_workers=myargs.workers, pin_memory=True, drop_last=False
+        batch_size=args.batch_size, shuffle=True,
+        num_workers=args.workers, pin_memory=True, drop_last=False
     )
     val_loader = torch.utils.data.DataLoader(
         Lesion_Complaint_Dataset(data_dir, 'val', val_tf, classCount, lesion_num, lesion_text, list_dir=list_dir),
-        batch_size=myargs.batch_size, shuffle=False,
-        num_workers=myargs.workers, pin_memory=True, drop_last=False
+        batch_size=args.batch_size, shuffle=False,
+        num_workers=args.workers, pin_memory=True, drop_last=False
     )
 
     # if RESUME:
     #     model = torch.load(model_path)
-    if ',' in myargs.use_gpu:
+    if ',' in args.use_gpu:
         torch.distributed.init_process_group(backend="nccl")
         model = model.cuda()
         model = nn.parallel.DistributedDataParallel(model)
@@ -229,45 +227,40 @@ def main(args):
 
 
     criterion = nn.CrossEntropyLoss()
-    # optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=myargs.learning_rate,
-    #                       momentum=myargs.momentum,
-    #                       weight_decay=myargs.weight_decay)
+    # optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=args.learning_rate,
+    #                       momentum=args.momentum,
+    #                       weight_decay=args.weight_decay)
     # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=0, last_epoch=-1)
-    optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=args.wd) #AdamW优化器
-    scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=len(train_loader),
-                                            num_training_steps=myargs.epoch*len(train_loader))
+    optimizer = optim.SGD(model.parameters(), lr=args.learning_rate,
+                          momentum=args.momentum,
+                          weight_decay=args.weight_decay)
+
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=0, last_epoch=-1)
 
 
-    train_log = open('logs/single_lesion/'+ model_name + '-train.log', 'w')
-    val_log = open('logs/single_lesion/'+ model_name + '-val.log', 'w')
+    train_log = open('logs/single_complaint/'+ model_name + '-train.log', 'w')
+    val_log = open('logs/single_complaint/'+ model_name + '-val.log', 'w')
     max_avg = 0
 
-    for epoch in range(0, myargs.epoch):
+    for epoch in range(0, args.epoch):
         train(model, train_loader, optimizer, scheduler, criterion, epoch, train_log)
         avg = val(model, val_loader, criterion, epoch, val_log)
 
         if avg > max_avg:
-            torch.save(model, './model/single_lesion/' + model_name + '.pth')
+            torch.save(model, './model/single_complaint/' + model_name + '.pth')
             max_avg = avg
 
 
 if __name__ == '__main__':
-    myargs = get_parser()
-    NAME = str(myargs.epoch) + "+" + str(myargs.learning_rate) + '+' + str(myargs.weight_decay) + '+' + myargs.loss
-    model_name = datetime.datetime.now().strftime('%Y-%m-%d') + '+' + myargs.oct_model + '+' + NAME
-    os.environ["CUDA_VISIBLE_DEVICES"] = myargs.use_gpu
-    data_dir = os.path.join(myargs.root_path, data_dir)
-    list_dir = os.path.join(myargs.root_path, list_dir)
+    args = get_parser()
+    NAME = str(args.epoch) + "+" + str(args.learning_rate) + '+' + str(args.weight_decay) + '+' + args.loss
+    model_name = datetime.datetime.now().strftime('%Y-%m-%d') + '+' + args.oct_model + '+' + args.text_model + ('_lock' if args.lock_text_weight else '') + '+'  + NAME
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.use_gpu
+    data_dir = os.path.join(args.root_path, data_dir)
+    list_dir = os.path.join(args.root_path, list_dir)
     # writer = SummaryWriter(os.path.join('runs', 'OCT/' + model_name[:-4]))
-    print("Start Auto Single Lesion Net ", model_name)
+    print("Train Single Complaint Net ", model_name)
     start = time.time()
-
-    scheduler = ag.scheduler.FIFOScheduler(main,
-                                       resource={'num_cpus': 2, 'num_gpus': 1},
-                                       num_trials=20,
-                                       reward_attr='accuracy',
-                                       time_attr='epoch')
-    scheduler.run()
-
+    main()
     end = time.time()
-    print('Finish Auto Single Lesion Net, Time=', end - start)
+    print('Finish Single Complaint Net, Time=', end - start)

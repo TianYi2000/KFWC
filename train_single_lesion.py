@@ -27,7 +27,7 @@ lesion_text = ['视网膜内液性暗腔','视网膜下积液','RPE脱离','RPE�
 classCount = len(cols)
 lesion_num = len(lesion_text)
 data_dir = 'AMD_processed/'
-list_dir = '主诉/saved-OCT图像-疾病-体征-主诉/'
+list_dir = '主诉/saved-OCT图像-疾病-体征-主诉-重新配对主诉/'
 
 mean = {
     224 : [0.485, 0.456, 0.406],
@@ -59,10 +59,11 @@ def get_parser():
                         choices=['micro', 'macro', 'weighted', 'samples'],
                         help='the type of averaging performed on the data')
     parser.add_argument('--momentum', type=float, default=0.9, help='The momentum in optimizer')
-    parser.add_argument('--weight_decay', type=float, default=0.001, help='The weight_decay in optimizer')
+    parser.add_argument('--weight_decay', type=float, default=0.0001, help='The weight_decay in optimizer')
     parser.add_argument('--learning_rate', type=float, default=0.001, help='The learning_rate in optimizer')
     parser.add_argument('--loss', type=str, default='bceloss', help='The loss function')
-
+    parser.add_argument('--text_model', type=str,default='bert', help='text model')
+    parser.add_argument('--lock_text_weight', action='store_true', help='lock_text_weight')
     parser.add_argument('--use_gpu', type=str, default='2,3', help='The GPU on server used')
     parser.add_argument('--local_rank', default=-1, type=int,help='node rank for distributed training')
 
@@ -190,7 +191,7 @@ def val(model, val_loader, criterion, epoch, log):
 
 
 def main():
-    model = Single_Complaint_Net(image_model=args.oct_model)
+    model = Single_Complaint_Net(image_model=args.oct_model, lock_text_weight = args.lock_text_weight)
 
 
     train_tf = transforms.Compose([
@@ -230,9 +231,11 @@ def main():
     #                       momentum=args.momentum,
     #                       weight_decay=args.weight_decay)
     # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=0, last_epoch=-1)
-    optimizer = AdamW(model.parameters(), lr=2e-5, weight_decay=1e-4) #AdamW优化器
-    scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=len(train_loader),
-                                            num_training_steps=args.epoch*len(train_loader))
+    optimizer = optim.SGD(model.parameters(), lr=args.learning_rate,
+                          momentum=args.momentum,
+                          weight_decay=args.weight_decay)
+
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=0, last_epoch=-1)
 
 
     train_log = open('logs/single_lesion/'+ model_name + '-train.log', 'w')
@@ -251,7 +254,7 @@ def main():
 if __name__ == '__main__':
     args = get_parser()
     NAME = str(args.epoch) + "+" + str(args.learning_rate) + '+' + str(args.weight_decay) + '+' + args.loss
-    model_name = datetime.datetime.now().strftime('%Y-%m-%d') + '+' + args.oct_model + '+' + NAME
+    model_name = datetime.datetime.now().strftime('%Y-%m-%d') + '+' + args.oct_model + '+' + args.text_model + ('_lock' if args.lock_text_weight else '') + '+'  + NAME
     os.environ["CUDA_VISIBLE_DEVICES"] = args.use_gpu
     data_dir = os.path.join(args.root_path, data_dir)
     list_dir = os.path.join(args.root_path, list_dir)
